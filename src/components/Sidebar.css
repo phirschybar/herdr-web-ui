@@ -334,6 +334,21 @@
   padding: 0 var(--space-1);
 }
 
+/* Settings → Mark unseen finishes: a row that finished after it was last opened carries a dot
+   before its title in the done color; once opened, its DONE goes quiet, like READY */
+.unseen-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--status-done);
+}
+
+.badge-done.is-seen {
+  color: var(--text-dim);
+  background: var(--bg-elevated);
+}
+
 /* background tasks still running: quieter than the state word beside it, and a number, not a word */
 .badge-background {
   color: var(--text-dim);

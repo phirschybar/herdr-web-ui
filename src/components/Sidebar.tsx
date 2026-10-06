@@ -17,6 +17,7 @@ import { folderName, placeLine, shortPathTitle } from "../lib/paneName.ts";
 import { useT } from "../lib/i18n.ts";
 import { groupDirectories } from "../lib/directoryGroups.ts";
 import { rosterPanes } from "../lib/dagPane.ts";
+import { activityOrder, isUnseenDone, loadSeen, markSeen, pruneSeen, saveSeen, seedSeen, stateSeqs, type SeenRecord } from "../lib/sidebarOrder.ts";
 import { useSettings, type SidebarGrouping } from "../lib/settings.ts";
 
 const ERROR_NOTE_MS = 5000;
@@ -57,11 +58,12 @@ export function RestoreErrorBadge({ reason }: { reason: string }) {
   return <span className="badge badge-restore-error" title={reason}>{t("NOT RESTORED")}</span>;
 }
 
-export function StatusBadge({ status }: { status?: AgentStatus }) {
+/** `seen`: with unseen marks on, a DONE already viewed is drawn quiet and an unseen one keeps the done color */
+export function StatusBadge({ status, seen }: { status?: AgentStatus; seen?: boolean }) {
   const t = useT();
   const value = knownStatus(status);
   return (
-    <span className={`badge badge-${value}`} data-status={value} title={t("Agent {status}", { status: t(STATUS_WORD[value]) })}>
+    <span className={`badge badge-${value}${seen && value === "done" ? " is-seen" : ""}`} data-status={value} title={t("Agent {status}", { status: t(STATUS_WORD[value]) })}>
       {t(STATUS_WORD[value])}
     </span>
   );
@@ -112,6 +114,7 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
   const t = useT();
   const { settings } = useSettings();
   const byFolder = settings.sidebarGrouping === "directory";
+  const byActivity = settings.sidebarOrder === "activity";
   const machineId = useMachineId();
   const { closePane, closeWorkspace, moveWorkspace, removeWorktree, renamePane, renameWorkspace } = useMachineApi();
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -179,16 +182,48 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
     setGroupCollapsed(directory.key, false);
   }, [selectedPaneId, snapshot, machineId, settings.sidebarGrouping, byFolder]);
 
+  const roster = useMemo(() => rosterPanes(snapshot?.panes ?? [], selectedPaneId), [snapshot?.panes, selectedPaneId]);
+  const seqs = useMemo(() => stateSeqs(snapshot), [snapshot]);
+
+  // Unseen marks (lib/sidebarOrder.ts): the pane on screen, while the page is visible, is seen at
+  // its current state_change_seq; the first record on this browser counts everything open as seen
+  const [seen, setSeen] = useState<SeenRecord | null>(() => loadSeen(machineId));
+  const [pageVisible, setPageVisible] = useState(() => document.visibilityState === "visible");
+  useEffect(() => {
+    const onVisibility = () => setPageVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+  useEffect(() => {
+    if (!settings.unseenMarks || !snapshot) return;
+    setSeen((current) => {
+      let next = current ?? seedSeen(snapshot.panes, seqs);
+      const seq = selectedPaneId && pageVisible ? seqs.get(selectedPaneId) : undefined;
+      if (selectedPaneId && seq !== undefined) next = markSeen(next, selectedPaneId, seq);
+      return pruneSeen(next, snapshot.panes);
+    });
+  }, [settings.unseenMarks, snapshot, seqs, selectedPaneId, pageVisible]);
+  useEffect(() => {
+    if (seen) saveSeen(machineId, seen);
+  }, [seen, machineId]);
+  /** panes finished and not viewed since: marked with marks on; with them off, Activity ranks every done pane there */
+  const unseen = useMemo(() => new Set(roster.filter((pane) => settings.unseenMarks
+    ? seen !== null && isUnseenDone(pane, seqs, seen)
+    : knownStatus(pane.agent_status) === "done").map((pane) => pane.pane_id)), [roster, seqs, seen, settings.unseenMarks]);
+
   const orderedWorkspaces = useMemo(() => {
     if (!snapshot) return [];
     const byId = new Map(snapshot.workspaces.map((workspace) => [workspace.workspace_id, workspace]));
-    return workspaceOrder.map((id) => byId.get(id)).filter((workspace): workspace is WorkspaceInfo => workspace !== undefined);
-  }, [snapshot, workspaceOrder]);
-  const roster = useMemo(() => rosterPanes(snapshot?.panes ?? [], selectedPaneId), [snapshot?.panes, selectedPaneId]);
+    const herdrOrder = workspaceOrder.map((id) => byId.get(id)).filter((workspace): workspace is WorkspaceInfo => workspace !== undefined);
+    // Activity is display-only: herdr's order (workspaceOrder) is never moved for it
+    return byActivity ? activityOrder(herdrOrder, roster, seqs, unseen) : herdrOrder;
+  }, [snapshot, workspaceOrder, byActivity, roster, seqs, unseen]);
   const directories = useMemo(() => groupDirectories(orderedWorkspaces, roster), [orderedWorkspaces, roster]);
   // herdr packs a repository's worktree workspaces under the one on its main checkout; a worktree
   // whose repository workspace is not open stays at the top level, in its own place
+  // Under Activity every workspace is its own row, as in herdr's agents panel: a worktree moves on its own
   const worktreeGroups = useMemo(() => {
+    if (byActivity) return orderedWorkspaces.map((workspace) => ({ workspace, children: [] as WorkspaceInfo[] }));
     const parentByRepo = new Map<string, WorkspaceInfo>();
     for (const workspace of orderedWorkspaces) {
       if (workspace.worktree && !workspace.worktree.is_linked_worktree && !parentByRepo.has(workspace.worktree.repo_key)) parentByRepo.set(workspace.worktree.repo_key, workspace);
@@ -203,7 +238,7 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
       childrenOf.set(parent.workspace_id, children);
     }
     return top.map((workspace) => ({ workspace, children: childrenOf.get(workspace.workspace_id) ?? [] }));
-  }, [orderedWorkspaces]);
+  }, [orderedWorkspaces, byActivity]);
 
   const noteError = (message: string, workspaceId?: string): void => setInlineError({ message, workspaceId });
 
@@ -402,9 +437,10 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
     const editingPane = editingPaneId === pane.pane_id;
     const editingWorkspace = editingWorkspaceId === `${scope}\u0000${workspace.workspace_id}`;
     const menuOpen = menu?.workspace.workspace_id === workspace.workspace_id && menu.scope === scope;
+    const rowUnseen = settings.unseenMarks && visiblePanes.some((candidate) => unseen.has(candidate.pane_id));
     return (
       <li
-        className={`workspace pane-item${dragWorkspaceId === workspace.workspace_id ? " is-dragging" : ""}${selected ? " is-selected" : ""}`}
+        className={`workspace pane-item${dragWorkspaceId === workspace.workspace_id ? " is-dragging" : ""}${selected ? " is-selected" : ""}${rowUnseen ? " is-unseen" : ""}`}
         key={workspace.workspace_id}
         onDragOver={(event) => {
           event.preventDefault();
@@ -413,7 +449,8 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
         onDrop={(event) => onDrop(event, workspace.workspace_id)}
       >
         <div className="pane-row">
-          <button
+          {/* Activity sets the order itself: no grip, so herdr's order is never moved from it */}
+          {!byActivity && <button
             type="button"
             className="sidebar-drag-handle"
             aria-label={t("Reorder workspace {name}", { name: workspace.label })}
@@ -424,7 +461,7 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
             onKeyDown={(event) => onHandleKeyDown(event, workspace.workspace_id)}
           >
             <GripVertical aria-hidden="true" />
-          </button>
+          </button>}
           <div
             className="pane-select"
             role="button"
@@ -459,7 +496,10 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
                     }}
                   />
                 ) : (
-                  <span className="pane-title">{displayTitle}</span>
+                  <>
+                    {rowUnseen && <span className="unseen-dot" role="img" aria-label={t("Finished, not opened yet")} title={t("Finished, not opened yet")} />}
+                    <span className="pane-title">{displayTitle}</span>
+                  </>
                 )}
               </span>
               {editingWorkspace ? (
@@ -479,7 +519,7 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
                 />
               ) : (
                 <span className="pane-meta">
-                  {pane.restore_error ? <RestoreErrorBadge reason={pane.restore_error} /> : <StatusBadge status={rollupStatus(visiblePanes.map((candidate) => candidate.agent_status))} />}
+                  {pane.restore_error ? <RestoreErrorBadge reason={pane.restore_error} /> : <StatusBadge status={rollupStatus(visiblePanes.map((candidate) => candidate.agent_status))} seen={settings.unseenMarks && !rowUnseen} />}
                   <BackgroundBadge count={(pane as HerdrPane).background_tasks} />
                   {place && <span className="pane-subtitle">{place}</span>}
                 </span>

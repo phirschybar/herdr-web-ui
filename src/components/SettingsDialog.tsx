@@ -275,6 +275,20 @@ export function SettingsDialog({ open, onClose, actions, updates, auth, herdrVer
               </div>
             </div>
             <div className="settings-row">
+              <div><span className="settings-label">{t("Sidebar order")}</span><span className="settings-description">{t("Activity puts what needs you and what just changed on top, as herdr's agents panel does; herdr's own order is not changed")}</span></div>
+              <div className="segmented" aria-label={t("Sidebar order")}>
+                {(["workspace", "activity"] as const).map((order) => (
+                  <button key={order} type="button" aria-pressed={settings.sidebarOrder === order} onClick={() => update({ sidebarOrder: order })}>
+                    {t(order === "workspace" ? "Workspaces" : "Activity")}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="settings-row">
+              <div><span className="settings-label">{t("Mark unseen finishes")}</span><span className="settings-description">{t("A pane that finished after you last opened it keeps a dot until you open it, on this browser")}</span></div>
+              <Toggle label={t("Mark unseen finishes")} checked={settings.unseenMarks} onChange={(unseenMarks) => update({ unseenMarks })} />
+            </div>
+            <div className="settings-row">
               <div><span className="settings-label">{t("Terminal font size")}</span><span className="settings-description">{t("Applied to every terminal pane")}</span></div>
               <div className="settings-stepper" aria-label={t("Terminal font size")}>
                 <button type="button" className="icon-button" aria-label={t("Decrease terminal font size")} disabled={settings.terminalFontSize <= TERMINAL_FONT_MIN} onClick={() => update({ terminalFontSize: settings.terminalFontSize - 1 })}><Minus /></button>

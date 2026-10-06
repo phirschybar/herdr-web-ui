@@ -15,6 +15,8 @@ export type ThemeSetting = "dark" | "light" | "system";
 export type ResolvedTheme = "dark" | "light";
 export type Density = "compact" | "comfortable";
 export type SidebarGrouping = "workspace" | "directory";
+/** the sidebar's row order: herdr's workspace order, or the order of herdr's agents panel under agent_panel_sort = "priority" */
+export type SidebarOrder = "workspace" | "activity";
 /** what the plan meters count: the share of a limit used, or what is left of it */
 export type UsageCount = "used" | "left";
 /** the limit a plan meter shows: the plan's week, or its short session (5 hours on Claude and Codex) */
@@ -40,6 +42,10 @@ export interface Settings {
   density: Density;
   /** The sidebar's display grouping; workspaces themselves remain independent. */
   sidebarGrouping: SidebarGrouping;
+  /** The sidebar's row order. Activity is display-only: herdr's own workspace order never changes. */
+  sidebarOrder: SidebarOrder;
+  /** a finished pane not opened since it finished keeps a mark, as herdr's sidebar keeps a done agent until it is viewed (per browser) */
+  unseenMarks: boolean;
   /** the chrome color family, keyed as data-palette in src/styles.css */
   palette: Palette;
   /** xterm font size in px */
@@ -103,6 +109,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   density: "comfortable",
   sidebarGrouping: "workspace",
+  sidebarOrder: "workspace",
+  unseenMarks: false,
   palette: "amber",
   terminalFontSize: 13,
   terminalWheelSpeed: 1,
@@ -229,6 +237,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     theme: theme === "dark" || theme === "light" || theme === "system" ? theme : DEFAULT_SETTINGS.theme,
     density: density === "compact" || density === "comfortable" ? density : DEFAULT_SETTINGS.density,
     sidebarGrouping: record["sidebarGrouping"] === "workspace" || record["sidebarGrouping"] === "directory" ? record["sidebarGrouping"] : DEFAULT_SETTINGS.sidebarGrouping,
+    sidebarOrder: record["sidebarOrder"] === "workspace" || record["sidebarOrder"] === "activity" ? record["sidebarOrder"] : DEFAULT_SETTINGS.sidebarOrder,
+    unseenMarks: record["unseenMarks"] === true,
     palette: record["palette"] === "amber" || record["palette"] === "report" || record["palette"] === "charcoal" || record["palette"] === "catppuccin" || record["palette"] === "lilac" ? record["palette"] : DEFAULT_SETTINGS.palette,
     terminalFontSize: typeof font === "number" && Number.isFinite(font) ? clampFont(font) : DEFAULT_SETTINGS.terminalFontSize,
     terminalWheelSpeed: typeof record["terminalWheelSpeed"] === "number" && Number.isFinite(record["terminalWheelSpeed"])
