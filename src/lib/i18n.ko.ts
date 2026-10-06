@@ -158,7 +158,7 @@ export const KO: Record<string, string> = {
   "By workspace": "워크스페이스별",
   "By folder": "폴더별",
   "Sidebar order": "사이드바 정렬",
-  "Activity puts what needs you and what just changed on top, as herdr's agents panel does; herdr's own order is not changed": "활동순은 응답이 필요한 것과 방금 바뀐 것을 위로 올립니다. herdr의 에이전트 패널과 같으며, herdr 자체의 순서는 바뀌지 않습니다",
+  "Activity puts what needs you on top, then whatever changed most recently; herdr's own order is not changed": "활동순은 응답이 필요한 것을 맨 위에, 그다음 가장 최근에 바뀐 순서로 놓습니다. herdr 자체의 순서는 바뀌지 않습니다",
   "Workspaces": "워크스페이스순",
   "Activity": "활동순",
   "Mark unseen finishes": "확인하지 않은 완료 표시",

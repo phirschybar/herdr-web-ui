@@ -22,28 +22,32 @@ describe("activity order", () => {
     pane("p-done-old", "done-old", "done"), pane("p-done-new", "done-new", "done"), pane("p-shell", "shell", "unknown")];
   const seqs = new Map([["p-idle", 50], ["p-working", 10], ["p-blocked", 1], ["p-done-old", 20], ["p-done-new", 30]]);
 
-  it("ranks blocked, then unseen done, then working, then the rest, the latest change first within each", () => {
-    expect(ids(activityOrder(workspaces, panes, seqs, new Set(["p-done-old", "p-done-new"]))))
-      .toEqual(["blocked", "done-new", "done-old", "working", "idle", "shell"]);
+  it("puts blocked first, then the latest change first whatever the state", () => {
+    expect(ids(activityOrder(workspaces, panes, seqs)))
+      .toEqual(["blocked", "idle", "done-new", "done-old", "working", "shell"]);
   });
 
-  it("drops a done pane already viewed to the rest, ordered by its change", () => {
-    expect(ids(activityOrder(workspaces, panes, seqs, new Set(["p-done-old"]))))
-      .toEqual(["blocked", "done-old", "working", "idle", "done-new", "shell"]);
+  it("keeps the row just worked in on top while it runs and after it finishes", () => {
+    // a message sent from "done-old": it starts working, so its counter is the newest
+    const sent = panes.map((entry) => entry.pane_id === "p-done-old" ? pane("p-done-old", "done-old", "working") : entry);
+    const running = new Map([...seqs, ["p-done-old", 60]]);
+    expect(ids(activityOrder(workspaces, sent, running)).slice(0, 2)).toEqual(["blocked", "done-old"]);
+    const finished = panes.map((entry) => entry.pane_id === "p-done-old" ? pane("p-done-old", "done-old", "done") : entry);
+    expect(ids(activityOrder(workspaces, finished, new Map([...running, ["p-done-old", 61]]))).slice(0, 2)).toEqual(["blocked", "done-old"]);
   });
 
-  it("puts a new workspace first among its rank, and keeps herdr's order between equals", () => {
+  it("puts a new workspace on top, and keeps herdr's order between equals", () => {
     const fresh = [...panes, pane("p-new", "new", "idle"), pane("p-tie", "tie", "idle")];
-    const order = activityOrder([...workspaces, workspace("new"), workspace("tie")], fresh, new Map([...seqs, ["p-new", 99]]), new Set());
-    expect(ids(order).slice(0, 3)).toEqual(["blocked", "working", "new"]);
+    const order = activityOrder([...workspaces, workspace("new"), workspace("tie")], fresh, new Map([...seqs, ["p-new", 99]]));
+    expect(ids(order).slice(0, 2)).toEqual(["blocked", "new"]);
     // no counter at all: the shell and "tie" keep herdr's order at the end
     expect(ids(order).slice(-2)).toEqual(["shell", "tie"]);
   });
 
-  it("ranks a workspace by its roll-up and its most recent pane", () => {
-    const multi = [pane("x1", "multi", "idle"), pane("x2", "multi", "blocked"), pane("y1", "other", "working")];
-    expect(ids(activityOrder([workspace("other"), workspace("multi")], multi, new Map([["x1", 5], ["x2", 1], ["y1", 9]]), new Set())))
-      .toEqual(["multi", "other"]);
+  it("pins a workspace with any blocked pane, and dates it by its most recent pane", () => {
+    const multi = [pane("x1", "multi", "idle"), pane("x2", "multi", "blocked"), pane("y1", "other", "working"), pane("z1", "late", "done")];
+    expect(ids(activityOrder([workspace("other"), workspace("late"), workspace("multi")], multi, new Map([["x1", 5], ["x2", 1], ["y1", 9], ["z1", 3]]))))
+      .toEqual(["multi", "other", "late"]);
   });
 });
 

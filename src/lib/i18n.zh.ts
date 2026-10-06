@@ -162,7 +162,7 @@ export const ZH: Record<string, string> = {
   "By workspace": "按工作区",
   "By folder": "按文件夹",
   "Sidebar order": "侧栏排序",
-  "Activity puts what needs you and what just changed on top, as herdr's agents panel does; herdr's own order is not changed": "按活动排序会把需要你回应的和刚刚变化的放在最上面，与 herdr 的代理面板相同；herdr 自身的顺序不会改变",
+  "Activity puts what needs you on top, then whatever changed most recently; herdr's own order is not changed": "按活动排序会把需要你回应的放在最上面，其余按最近变化排序；herdr 自身的顺序不会改变",
   "Workspaces": "工作区顺序",
   "Activity": "按活动",
   "Mark unseen finishes": "标记未查看的完成",

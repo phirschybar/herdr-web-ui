@@ -275,7 +275,7 @@ export function SettingsDialog({ open, onClose, actions, updates, auth, herdrVer
               </div>
             </div>
             <div className="settings-row">
-              <div><span className="settings-label">{t("Sidebar order")}</span><span className="settings-description">{t("Activity puts what needs you and what just changed on top, as herdr's agents panel does; herdr's own order is not changed")}</span></div>
+              <div><span className="settings-label">{t("Sidebar order")}</span><span className="settings-description">{t("Activity puts what needs you on top, then whatever changed most recently; herdr's own order is not changed")}</span></div>
               <div className="segmented" aria-label={t("Sidebar order")}>
                 {(["workspace", "activity"] as const).map((order) => (
                   <button key={order} type="button" aria-pressed={settings.sidebarOrder === order} onClick={() => update({ sidebarOrder: order })}>

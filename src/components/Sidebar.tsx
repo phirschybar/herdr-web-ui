@@ -206,18 +206,18 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
   useEffect(() => {
     if (seen) saveSeen(machineId, seen);
   }, [seen, machineId]);
-  /** panes finished and not viewed since: marked with marks on; with them off, Activity ranks every done pane there */
-  const unseen = useMemo(() => new Set(roster.filter((pane) => settings.unseenMarks
-    ? seen !== null && isUnseenDone(pane, seqs, seen)
-    : knownStatus(pane.agent_status) === "done").map((pane) => pane.pane_id)), [roster, seqs, seen, settings.unseenMarks]);
+  /** panes finished and not viewed since, marked while unseen marks are on */
+  const unseen = useMemo(() => new Set(settings.unseenMarks && seen !== null
+    ? roster.filter((pane) => isUnseenDone(pane, seqs, seen)).map((pane) => pane.pane_id)
+    : []), [roster, seqs, seen, settings.unseenMarks]);
 
   const orderedWorkspaces = useMemo(() => {
     if (!snapshot) return [];
     const byId = new Map(snapshot.workspaces.map((workspace) => [workspace.workspace_id, workspace]));
     const herdrOrder = workspaceOrder.map((id) => byId.get(id)).filter((workspace): workspace is WorkspaceInfo => workspace !== undefined);
     // Activity is display-only: herdr's order (workspaceOrder) is never moved for it
-    return byActivity ? activityOrder(herdrOrder, roster, seqs, unseen) : herdrOrder;
-  }, [snapshot, workspaceOrder, byActivity, roster, seqs, unseen]);
+    return byActivity ? activityOrder(herdrOrder, roster, seqs) : herdrOrder;
+  }, [snapshot, workspaceOrder, byActivity, roster, seqs]);
   const directories = useMemo(() => groupDirectories(orderedWorkspaces, roster), [orderedWorkspaces, roster]);
   // herdr packs a repository's worktree workspaces under the one on its main checkout; a worktree
   // whose repository workspace is not open stays at the top level, in its own place

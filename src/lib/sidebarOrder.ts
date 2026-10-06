@@ -1,7 +1,7 @@
 /**
- * The sidebar's Activity order and its unseen marks, as herdr's own sidebar does them: the
- * agents panel under `agent_panel_sort = "priority"` puts what needs you and what just changed
- * on top, and a done agent stays marked until it is viewed.
+ * The sidebar's Activity order and its unseen marks. Activity keeps what needs you and what
+ * changed last on top, so the latest work is where you look; a done agent stays marked until it
+ * is viewed, as herdr's own sidebar keeps it.
  *
  * Recency is herdr's `state_change_seq`, one counter for the session bumped on every agent state
  * change. `session.snapshot` leaves it off `panes` and carries it on `agents`, so it is read there.
@@ -59,25 +59,18 @@ export function pruneSeen(record: SeenRecord, panes: readonly Pick<PaneInfo, "pa
   return next;
 }
 
-/** 0 blocked, 1 finished and not yet viewed, 2 working, 3 the rest */
-function activityRank(panes: readonly PaneInfo[], unseen: ReadonlySet<string>): number {
-  const state = rollupStatus(panes.map((pane) => pane.agent_status));
-  if (state === "blocked") return 0;
-  if (panes.some((pane) => unseen.has(pane.pane_id))) return 1;
-  if (state === "working") return 2;
-  return 3;
-}
-
 /**
- * Workspaces in Activity order: by rank, then the most recent state change among their panes,
- * then herdr's own order. `unseen` holds the panes that rank as "finished, not yet viewed": with
- * marks off the caller passes every done pane, as herdr ranks done above idle.
+ * Workspaces in Activity order: a blocked one first, then the most recent state change among
+ * their panes, then herdr's own order. State is not ranked otherwise: a ranked state moves a row
+ * the moment it changes (a pane sent a message fell below every DONE while it ran), where recency
+ * keeps the row just worked in on top while it runs and after it finishes. An unseen finish is
+ * told by its mark, not by its place.
  */
-export function activityOrder(workspaces: readonly WorkspaceInfo[], panes: readonly PaneInfo[], seqs: ReadonlyMap<string, number>, unseen: ReadonlySet<string>): WorkspaceInfo[] {
+export function activityOrder(workspaces: readonly WorkspaceInfo[], panes: readonly PaneInfo[], seqs: ReadonlyMap<string, number>): WorkspaceInfo[] {
   const keyed = workspaces.map((workspace, index) => {
     const own = panes.filter((pane) => pane.workspace_id === workspace.workspace_id);
     const recent = Math.max(-1, ...own.map((pane) => seqs.get(pane.pane_id) ?? -1));
-    return { workspace, index, rank: activityRank(own, unseen), recent };
+    return { workspace, index, rank: rollupStatus(own.map((pane) => pane.agent_status)) === "blocked" ? 0 : 1, recent };
   });
   keyed.sort((a, b) => a.rank - b.rank || b.recent - a.recent || a.index - b.index);
   return keyed.map((entry) => entry.workspace);

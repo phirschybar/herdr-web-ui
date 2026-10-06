@@ -160,7 +160,7 @@ export const JA: Record<string, string> = {
   "By workspace": "ワークスペース別",
   "By folder": "フォルダー別",
   "Sidebar order": "サイドバーの並び順",
-  "Activity puts what needs you and what just changed on top, as herdr's agents panel does; herdr's own order is not changed": "アクティビティ順では、応答が必要なものと直前に変化したものが上に来ます。herdr のエージェントパネルと同じで、herdr 自体の順序は変わりません",
+  "Activity puts what needs you on top, then whatever changed most recently; herdr's own order is not changed": "アクティビティ順では、応答が必要なものを一番上に、その後は最近変化した順に並べます。herdr 自体の順序は変わりません",
   "Workspaces": "ワークスペース順",
   "Activity": "アクティビティ順",
   "Mark unseen finishes": "未確認の完了に印を付ける",
