@@ -19,6 +19,8 @@ export type Density = "compact" | "comfortable";
 export type SidebarRows = "one" | "two";
 /** the Agents list's order: herdr's workspace order, or a waiting agent first and then the latest change */
 export type AgentOrder = "workspace" | "activity";
+/** how agent logos are drawn: in their brand colors, or in the text color (data-marks on <html>) */
+export type AgentMarks = "color" | "mono";
 /** what the plan meters count: the share of a limit used, or what is left of it */
 export type UsageCount = "used" | "left";
 /** the limit a plan meter shows: the plan's week, or its short session (5 hours on Claude and Codex) */
@@ -54,6 +56,8 @@ export interface Settings {
   agentOrder: AgentOrder;
   /** a DONE opened here since it finished reads as ready, as herdr's own view would make it (per browser and PC) */
   quietOpenedDone: boolean;
+  /** Agent logos: brand colors, or the text color, so a list of one agent is not a stripe of tiles */
+  agentMarks: AgentMarks;
   /** the chrome color family, keyed as data-palette in src/styles.css */
   palette: Palette;
   /** xterm font size in px */
@@ -125,6 +129,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarRows: "two",
   agentOrder: "workspace",
   quietOpenedDone: false,
+  agentMarks: "color",
   palette: "amber",
   terminalFontSize: 13,
   terminalWheelSpeed: 1,
@@ -273,6 +278,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     sidebarRows: record["sidebarRows"] === "one" || record["sidebarRows"] === "two" ? record["sidebarRows"] : DEFAULT_SETTINGS.sidebarRows,
     agentOrder: record["agentOrder"] === "workspace" || record["agentOrder"] === "activity" ? record["agentOrder"] : DEFAULT_SETTINGS.agentOrder,
     quietOpenedDone: record["quietOpenedDone"] === true,
+    agentMarks: record["agentMarks"] === "color" || record["agentMarks"] === "mono" ? record["agentMarks"] : DEFAULT_SETTINGS.agentMarks,
     palette: record["palette"] === "amber" || record["palette"] === "report" || record["palette"] === "charcoal" || record["palette"] === "catppuccin" || record["palette"] === "lilac" ? record["palette"] : DEFAULT_SETTINGS.palette,
     terminalFontSize: typeof font === "number" && Number.isFinite(font) ? clampFont(font) : DEFAULT_SETTINGS.terminalFontSize,
     terminalWheelSpeed: typeof record["terminalWheelSpeed"] === "number" && Number.isFinite(record["terminalWheelSpeed"])
@@ -382,6 +388,8 @@ function applyToDocument(settings: Settings, resolved: ResolvedTheme, language: 
   root.dataset["density"] = settings.density;
   root.dataset["palette"] = settings.palette;
   root.dataset["chatWidth"] = settings.chatWidth;
+  // src/components/AgentMark.css keys the mono logos on it
+  root.dataset["marks"] = settings.agentMarks;
   // ChatView.css scales its type tokens by this: the chosen size over the density's
   root.style.setProperty("--chat-scale", String(chatFontSize(settings) / CHAT_BASE_FONT[settings.density]));
   // ChatView.css sets the transcript's prose in this, and falls back to --font-ui without it
