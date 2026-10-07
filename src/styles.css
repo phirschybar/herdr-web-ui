@@ -775,6 +775,24 @@ button {
   display: contents;
 }
 
+/* the palette and the Settings gear, side by side at the end of the sidebar's top row */
+.header-side-end {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Settings: the gear in the sidebar's top row from 769px; below, the drawer's footer keeps it.
+   With the gear up top, the footer stays only for the plan meters, so Agents reaches the bottom */
+@media (max-width: 768px) {
+  .header-side .sidebar-settings-button { display: none; }
+}
+
+@media (min-width: 769px) {
+  .sidebar-footer .sidebar-footer-settings { display: none; }
+  .sidebar-footer:not(:has(.usage)) { display: none; }
+}
+
 .header-meta {
   display: inline-flex;
   align-items: center;
