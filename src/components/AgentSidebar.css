@@ -12,6 +12,13 @@
 .agents-sidebar.is-collapsed,
 .agents-sidebar.is-empty { flex: 0 0 auto; }
 
+/* every PC's workspaces folded: the roster keeps only its headers, and Agents takes the rest of
+   the sidebar instead of stopping at half of it over an empty space (Machines.css shrinks the roster) */
+.sidebar-shell:has(.machine-group):not(:has(.machine-group:not(.is-collapsed))) .agents-sidebar:not(.is-collapsed):not(.is-empty) {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
 /* positioned: a row's visually hidden label is absolute, and must not size the page instead */
 .agent-list-contents {
   position: relative;

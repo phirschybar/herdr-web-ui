@@ -24,6 +24,9 @@
 
 .machine-list > .tree-state { padding-left: calc(var(--side-gutter) + var(--side-box)); }
 
+/* every PC folded: the roster is as tall as its headers and gives the rest to Agents (AgentSidebar.css) */
+.sidebar-shell:has(.machine-group):not(:has(.machine-group:not(.is-collapsed))) .machine-list { flex: 0 0 auto; }
+
 .machine-group {
   --machine-indent: calc(var(--side-gutter) + var(--side-box));
 }

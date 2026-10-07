@@ -64,7 +64,7 @@ function MachineGroup({ machine, ...props }: Props & { machine: Machine }) {
     try { localStorage.setItem(`herdr-web-ui:pc-collapsed:${machine.id}`, collapsed ? "0" : "1"); } catch {}
   };
   // the PC's name is the head of its workspaces, and the caret beside its + the one fold over them
-  return <section className={`machine-group${props.selectedMachineId === machine.id ? " is-current" : ""}${online ? "" : " is-offline"}`} aria-label={t("PC {name}", { name: machine.name })}>
+  return <section className={`machine-group${props.selectedMachineId === machine.id ? " is-current" : ""}${online ? "" : " is-offline"}${collapsed ? " is-collapsed" : ""}`} aria-label={t("PC {name}", { name: machine.name })}>
     <header className="machine-header">
       <div className="machine-title">
         <span className="sidebar-mark" aria-hidden="true"><Monitor /></span>
