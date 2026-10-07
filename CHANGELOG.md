@@ -13,9 +13,11 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
   work in view: the workspace you just sent a message to stays on top while it runs and after it
   finishes, and a new workspace starts there. It only changes what the sidebar shows; herdr's own
   workspace order stays as it is. **Workspaces** (herdr's order) remains the default.
+  ([#529](https://github.com/devswha/herdr-web-ui/pull/529) by @phirschybar)
 - **Settings → Appearance → Mark unseen finishes** (off by default) puts a dot on a workspace that
   finished after you last opened it, and quiets its DONE once you open it, as herdr keeps a done
   agent marked until it is viewed. It is remembered per PC in this browser.
+  ([#529](https://github.com/devswha/herdr-web-ui/pull/529) by @phirschybar)
 
 ### Changed
 - The message box follows **Settings → Chat font size**, as the transcript and prompt cards
