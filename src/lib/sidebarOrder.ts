@@ -26,6 +26,37 @@ export function stateSeqs(snapshot: Pick<SessionSnapshot, "agents"> | null | und
   return seqs;
 }
 
+/** What `liveSeqs` remembers between snapshots: each pane's last status, and the changes it dated itself. */
+export interface SeqMemory { status: Map<string, unknown>; bumped: Map<string, number> }
+export const newSeqMemory = (): SeqMemory => ({ status: new Map(), bumped: new Map() });
+
+/**
+ * `stateSeqs`, kept in step with pushed statuses. A pane-status push lands in the snapshot at once
+ * (applyPaneStatus), but the counter only comes with the next roster read, up to POLL_MS later: a
+ * pane sent a message would sit in its old place, and a finish seen through that gap would count as
+ * viewed at the old counter. So a status that changed since the last call is dated now, just above
+ * every counter known; herdr's own counter for that change is higher and takes over when it comes.
+ * Mutates `memory`.
+ */
+export function liveSeqs(snapshot: Pick<SessionSnapshot, "agents" | "panes"> | null | undefined, memory: SeqMemory): Map<string, number> {
+  const seqs = stateSeqs(snapshot);
+  const panes = snapshot?.panes ?? [];
+  let top = Math.max(0, ...seqs.values(), ...memory.bumped.values());
+  for (const pane of panes) {
+    const changed = memory.status.has(pane.pane_id) && memory.status.get(pane.pane_id) !== pane.agent_status;
+    if (changed && seqs.has(pane.pane_id)) memory.bumped.set(pane.pane_id, top += 0.001);
+    memory.status.set(pane.pane_id, pane.agent_status);
+  }
+  const open = new Set(panes.map((pane) => pane.pane_id));
+  for (const id of memory.status.keys()) if (!open.has(id) && panes.length > 0) memory.status.delete(id);
+  for (const [id, bump] of memory.bumped) {
+    const real = seqs.get(id);
+    if (real === undefined || real > bump) memory.bumped.delete(id);
+    else seqs.set(id, bump);
+  }
+  return seqs;
+}
+
 /** A pane that finished after it was last viewed. A pane with no counter is never unseen. */
 export function isUnseenDone(pane: Pick<PaneInfo, "pane_id" | "agent_status">, seqs: ReadonlyMap<string, number>, seen: SeenRecord): boolean {
   if (knownStatus(pane.agent_status) !== "done") return false;

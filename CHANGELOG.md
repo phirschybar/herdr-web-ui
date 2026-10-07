@@ -7,6 +7,16 @@ between releases do not reach them. Remote-PC runtime bundles are versioned sepa
 
 ## [Unreleased]
 
+### Added
+- **Settings → Appearance → Sidebar order → Activity** pins a workspace with a blocked agent on
+  top and orders the rest by their latest state change, as herdr's agents panel keeps the latest
+  work in view: the workspace you just sent a message to stays on top while it runs and after it
+  finishes, and a new workspace starts there. It only changes what the sidebar shows; herdr's own
+  workspace order stays as it is. **Workspaces** (herdr's order) remains the default.
+- **Settings → Appearance → Mark unseen finishes** (off by default) puts a dot on a workspace that
+  finished after you last opened it, and quiets its DONE once you open it, as herdr keeps a done
+  agent marked until it is viewed. It is remembered per PC in this browser.
+
 ### Changed
 - The message box follows **Settings → Chat font size**, as the transcript and prompt cards
   already did: with a mouse it is typed at the transcript's size, and on a touch screen it

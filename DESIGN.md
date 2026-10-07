@@ -372,7 +372,8 @@ One set for both themes: the card is island black wherever it shows.
 ### Badge (`.badge`)
 - Agent states read **READY**, **RUN**, **INPUT**, **DONE**; unknown reads **—**.
 - Idle is elevated/dim; working, blocked and done use their own tint and text. RUN carries a small
-  breathing dot before the word; the word itself never fades.
+  breathing dot before the word; the word itself never fades. With unseen marks on, a DONE already
+  opened is drawn as idle is (`.badge-done.is-seen`).
 - The written label and unknown dashed edge keep color from being the only signal.
 
 ### Pill (`.pill`)
@@ -393,6 +394,14 @@ One set for both themes: the card is island black wherever it shows.
 - Appearance's **Sidebar grouping** is **By workspace** by default. **By folder** opts into the
   grouping below. The choice applies immediately and persists in the browser's existing Settings
   record; folder folds are remembered per PC and path.
+- Appearance's **Sidebar order** is **Workspaces** by default: herdr's order, moved only by the
+  handles. **Activity** pins a workspace with a blocked pane on top and orders the rest by their
+  most recent state change (herdr's `state_change_seq`, read from the snapshot's `agents`), so the
+  row just worked in stays on top while it runs and after it finishes. It is display-only: no
+  handles, herdr's order never moves, and worktree workspaces are rows of their own.
+- Appearance's **Mark unseen finishes** is off by default. On, a row that finished after it was
+  last on screen (selected while the page is visible) carries a 7px `--status-done` dot before
+  its title; once opened, its DONE is drawn quiet. "Seen" is kept per PC in this browser.
 - In folder mode, within each PC, panes with the same full cwd share a folder group, including panes from
   different workspaces. Trailing separators and Windows slash styles are normalized; case and
   symlinks are not resolved. Unknown cwd stays with its workspace rather than merging unrelated sessions.

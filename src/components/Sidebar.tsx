@@ -17,7 +17,7 @@ import { folderName, placeLine, shortPathTitle } from "../lib/paneName.ts";
 import { useT } from "../lib/i18n.ts";
 import { groupDirectories } from "../lib/directoryGroups.ts";
 import { rosterPanes } from "../lib/dagPane.ts";
-import { activityOrder, isUnseenDone, loadSeen, markSeen, pruneSeen, saveSeen, seedSeen, stateSeqs, type SeenRecord } from "../lib/sidebarOrder.ts";
+import { activityOrder, isUnseenDone, liveSeqs, loadSeen, markSeen, newSeqMemory, pruneSeen, saveSeen, seedSeen, type SeenRecord } from "../lib/sidebarOrder.ts";
 import { useSettings, type SidebarGrouping } from "../lib/settings.ts";
 
 const ERROR_NOTE_MS = 5000;
@@ -183,7 +183,9 @@ export function Sidebar({ snapshot, selectedPaneId, actions }: SidebarProps) {
   }, [selectedPaneId, snapshot, machineId, settings.sidebarGrouping, byFolder]);
 
   const roster = useMemo(() => rosterPanes(snapshot?.panes ?? [], selectedPaneId), [snapshot?.panes, selectedPaneId]);
-  const seqs = useMemo(() => stateSeqs(snapshot), [snapshot]);
+  // herdr's state_change_seq per pane, kept in step with pushed statuses (lib/sidebarOrder.ts liveSeqs)
+  const seqMemory = useRef(newSeqMemory());
+  const seqs = useMemo(() => liveSeqs(snapshot, seqMemory.current), [snapshot]);
 
   // Unseen marks (lib/sidebarOrder.ts): the pane on screen, while the page is visible, is seen at
   // its current state_change_seq; the first record on this browser counts everything open as seen

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { PaneInfo, WorkspaceInfo } from "../../shared/protocol.ts";
-import { activityOrder, isUnseenDone, markSeen, pruneSeen, seedSeen, stateSeqs } from "./sidebarOrder.ts";
+import { activityOrder, isUnseenDone, liveSeqs, markSeen, newSeqMemory, pruneSeen, seedSeen, stateSeqs } from "./sidebarOrder.ts";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./settings.ts";
 
 const workspace = (id: string) => ({ workspace_id: id, label: id }) as WorkspaceInfo;
@@ -13,6 +13,34 @@ describe("state_change_seq", () => {
     const seqs = stateSeqs({ agents: [{ pane_id: "a", state_change_seq: 7 }, { pane_id: "b" }, { pane_id: "c", state_change_seq: "9" }] } as never);
     expect([...seqs]).toEqual([["a", 7]]);
     expect(stateSeqs(null).size).toBe(0);
+  });
+});
+
+describe("live counters", () => {
+  const snap = (statuses: Record<string, string>, seqs: Record<string, number>) => ({
+    panes: Object.entries(statuses).map(([id, status]) => pane(id, `w-${id}`, status)),
+    agents: Object.entries(seqs).map(([pane_id, state_change_seq]) => ({ pane_id, state_change_seq })),
+  }) as never;
+
+  it("dates a pushed status change above every known counter until herdr's own counter comes", () => {
+    const memory = newSeqMemory();
+    expect([...liveSeqs(snap({ a: "idle", b: "done" }, { a: 5, b: 9 }), memory)]).toEqual([["a", 5], ["b", 9]]);
+    // a is sent a message: the push changes its status, the counter is still 5
+    const pushed = liveSeqs(snap({ a: "working", b: "done" }, { a: 5, b: 9 }), memory);
+    expect(pushed.get("a")!).toBeGreaterThan(9);
+    // it finishes before the roster is read again: dated later still, so it is a new change
+    const finished = liveSeqs(snap({ a: "done", b: "done" }, { a: 5, b: 9 }), memory);
+    expect(finished.get("a")!).toBeGreaterThan(pushed.get("a")!);
+    // herdr's counter arrives and replaces the stand-in
+    expect(liveSeqs(snap({ a: "done", b: "done" }, { a: 11, b: 9 }), memory).get("a")).toBe(11);
+    expect(memory.bumped.size).toBe(0);
+  });
+
+  it("does not date a pane's first sighting, or a pane with no counter", () => {
+    const memory = newSeqMemory();
+    liveSeqs(snap({ a: "idle", shell: "unknown" }, { a: 5 }), memory);
+    const next = liveSeqs(snap({ a: "idle", shell: "working", c: "done" }, { a: 5, c: 7 }), memory);
+    expect([...next]).toEqual([["a", 5], ["c", 7]]);
   });
 });
 

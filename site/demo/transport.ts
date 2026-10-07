@@ -53,6 +53,9 @@ const chats = new Map<string, { turns: ConversationTurn[]; metadata: { model: st
 let promptOpen = true;
 let promptId = PROMPT.id;
 let nextWorkspace = 100;
+/** herdr's state_change_seq: one counter for the session, bumped on every agent state change */
+let stateSeq = Math.max(0, ...(local.snapshot?.agents ?? []).map((agent) => agent.state_change_seq ?? 0));
+const nextStateSeq = (): number => ++stateSeq;
 
 /** The OmO pane's background tasks (the composer's "2 background tasks"), timed from now. */
 const OMO_TASKS_PANE = "docs";
@@ -93,7 +96,7 @@ function backfillPanes(): void {
     if (recorded.has(spec.key)) continue;
     const id = `w${(nextWorkspace++).toString(36)}`;
     const pane: Pane = { ...structuredClone(paneTemplate), pane_id: `${id}:p1`, tab_id: `${id}:t1`, terminal_id: `${id}:term`, workspace_id: id, label: spec.title, title: spec.title, agent: spec.agent, agent_status: spec.agent ? spec.state ?? "idle" : "unknown", cwd: `/home/demo/${spec.label}`, foreground_cwd: `/home/demo/${spec.label}` };
-    snap.panes.push(pane);
+    addPane(pane);
     snap.tabs.push({ ...structuredClone(snap.tabs[0]!), tab_id: `${id}:t1`, workspace_id: id, label: spec.label, number: 1, agent_status: pane.agent_status, focused: false, pane_count: 1 });
     snap.workspaces.push({ ...structuredClone(template), workspace_id: id, label: spec.label, number: snap.workspaces.length + 1, active_tab_id: `${id}:t1`, agent_status: pane.agent_status, focused: false, pane_count: 1, tab_count: 1 });
     keyOfPane.set(pane.pane_id, spec.key);
@@ -116,10 +119,23 @@ function paneOf(paneId: string): Pane | undefined {
   return snapshot().panes.find((pane) => pane.pane_id === paneId);
 }
 
+/** A new pane, and for an agent pane its entry under `agents`, as herdr lists it, with a fresh state_change_seq. */
+function addPane(pane: Pane): void {
+  const snap = snapshot();
+  snap.panes.push(pane);
+  const template = snap.agents[0];
+  if (!pane.agent || !template) return;
+  snap.agents.push({ ...structuredClone(template), pane_id: pane.pane_id, tab_id: pane.tab_id, workspace_id: pane.workspace_id, terminal_id: pane.terminal_id,
+    agent: pane.agent, agent_status: pane.agent_status, cwd: pane.cwd, foreground_cwd: pane.foreground_cwd, state_change_seq: nextStateSeq() });
+}
+
 function setStatus(paneId: string, status: AgentStatus): void {
   const pane = paneOf(paneId);
   if (!pane) return;
   pane.agent_status = status;
+  // as herdr does, every state change bumps the session's state_change_seq on the pane's agent
+  const agent = snapshot().agents.find((entry) => entry.pane_id === paneId);
+  if (agent) Object.assign(agent, { agent_status: status, state_change_seq: nextStateSeq() });
   for (const workspace of snapshot().workspaces) if (workspace.workspace_id === pane.workspace_id) workspace.agent_status = status;
   for (const tab of snapshot().tabs) if (tab.tab_id === pane.tab_id) tab.agent_status = status;
   emitSse({ type: "machine-message", machine_id: local.id, message: { type: "pane-status", pane_id: paneId, agent_status: status } });
@@ -277,6 +293,7 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
     if (!pane) return error("not_found", "no such pane", 404);
     const snap = snapshot();
     snap.panes = snap.panes.filter((p) => p.workspace_id !== pane.workspace_id);
+    snap.agents = snap.agents.filter((a) => a.workspace_id !== pane.workspace_id);
     snap.tabs = snap.tabs.filter((t) => t.workspace_id !== pane.workspace_id);
     snap.workspaces = snap.workspaces.filter((w) => w.workspace_id !== pane.workspace_id);
     snap.layouts = snap.layouts.filter((l) => (l as { workspace_id?: string }).workspace_id !== pane.workspace_id);
@@ -338,7 +355,7 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
     const template = snap.panes[0]!;
     const label = String(body["label"] ?? "") || cwd.split("/").pop() || "new";
     const pane: Pane = { ...structuredClone(template), pane_id: `${id}:p1`, tab_id: `${id}:t1`, terminal_id: `${id}:term`, workspace_id: id, label: null, title: null, agent, agent_session: null, agent_status: agent ? "working" : "unknown", cwd, foreground_cwd: cwd, focused: false, terminal_title: null, terminal_title_stripped: null, revision: 1 };
-    snap.panes.push(pane);
+    addPane(pane);
     snap.tabs.push({ ...structuredClone(snap.tabs[0]!), tab_id: `${id}:t1`, workspace_id: id, label, number: 1, agent_status: pane.agent_status, focused: false, pane_count: 1 });
     snap.workspaces.push({ ...structuredClone(snap.workspaces[0]!), workspace_id: id, label, number: snap.workspaces.length + 1, active_tab_id: `${id}:t1`, agent_status: pane.agent_status, focused: false, pane_count: 1, tab_count: 1 });
     if (agent) {
@@ -362,7 +379,7 @@ async function route(url: URL, method: string, init: RequestInit | undefined, in
     const tabId = `${id}:t${number}`;
     const template = snap.panes[0]!;
     const pane: Pane = { ...structuredClone(template), pane_id: `${id}:p${(nextWorkspace++).toString(36)}`, tab_id: tabId, terminal_id: `${id}:term${number}`, workspace_id: id, label: null, title: null, agent, agent_session: null, agent_status: agent ? "working" : "unknown", cwd, foreground_cwd: cwd, focused: false, terminal_title: null, terminal_title_stripped: null, revision: 1 };
-    snap.panes.push(pane);
+    addPane(pane);
     snap.tabs.push({ ...structuredClone(snap.tabs[0]!), tab_id: tabId, workspace_id: id, label: String(body["label"] ?? "") || String(number), number, agent_status: pane.agent_status, focused: false, pane_count: 1 });
     workspace.tab_count = number;
     workspace.pane_count = siblings.length + 1;
