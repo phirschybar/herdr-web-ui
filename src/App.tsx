@@ -1,5 +1,5 @@
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bell, Ellipsis, FolderInput, FolderOpen, Link, Lock, Menu, MessageSquare, PanelLeft, Plus, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderInput, FolderOpen, Link, Lock, Menu, MessageSquare, PanelLeft, Plus, Search, Settings, SquareTerminal, X } from "lucide-react";
 
 import type { AgentStatus, ServerMessage, AccessRefusal, HealthAuth, HerdrPane } from "../shared/protocol.ts";
 import { ApiError, authenticate, fetchHealth, fetchBridgeHealth, fetchMachines, fetchSession, pairDevice, routeMissing, sendTestPush, signOut, splitPane, zoomPane, type HealthInfo } from "./lib/api.ts";
@@ -1089,9 +1089,16 @@ export function App() {
           >
             <PanelLeft />
           </button>
-          <button type="button" className="icon-button palette-button" aria-label={t("Command palette")} title={t("Command palette (⌘⇧K)")} onClick={() => setPaletteOpen(true)}>
-            <Search />
-          </button>
+          {/* the palette and Settings close the sidebar's top row together; the gear stands in for
+              the footer's Settings from 769px, where the drawer's footer keeps it below (styles.css) */}
+          <span className="header-side-end">
+            <button type="button" className="icon-button palette-button" aria-label={t("Command palette")} title={t("Command palette (⌘⇧K)")} onClick={() => setPaletteOpen(true)}>
+              <Search />
+            </button>
+            <button type="button" className="icon-button sidebar-settings-button" aria-label={t("Settings")} title={t("Settings (⌘⇧,)")} onClick={actions.openSettings}>
+              <Settings />
+            </button>
+          </span>
         </div>
         {headerNote ? (
           <div className="context">

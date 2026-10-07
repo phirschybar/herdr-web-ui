@@ -96,7 +96,8 @@ try {
       assert.ok(metrics.listBottom - metrics.machineBottom <= spacing, `${label} folded list padding is ${metrics.listBottom - metrics.machineBottom}px`);
       assert.ok(metrics.agentsHeight <= metrics.shellHeight / 2 + 1, `${label} Agents keeps its half-sidebar cap`);
       assert.equal(metrics.contentsOverflow, "auto", `${label} Agents keeps scroll ownership`);
-      assert.equal(Math.round(metrics.footerBottom), Math.round(metrics.shellBottom), `${label} footer stays at the bottom`);
+      // fork: an empty footer is hidden from 769px (Settings is the gear), and has no bottom to keep
+      if (metrics.footerBottom > 0) assert.equal(Math.round(metrics.footerBottom), Math.round(metrics.shellBottom), `${label} footer stays at the bottom`);
       assert.deepEqual(await page.locator(".agents-sidebar .agent-title").allTextContents(), before, `${label} agent order is unchanged`);
 
       await agentToggle.click();

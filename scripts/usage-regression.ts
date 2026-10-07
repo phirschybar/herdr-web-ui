@@ -49,7 +49,8 @@ export async function checkUsageMeters(browser: Browser, origin: string): Promis
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(origin);
     const strip = page.locator(".usage-strip");
-    const settingsButton = page.locator(".sidebar-footer-row .sidebar-footer-action");
+    // fork: from 769px Settings is the gear in the sidebar's top row, not the footer's button
+    const settingsButton = page.locator(".sidebar-settings-button");
     const toggle = page.getByRole("switch", { name: "Show plan limits", exact: true });
 
     // off until chosen: nothing is shown and no sign-in is sent anywhere
@@ -85,8 +86,9 @@ export async function checkUsageMeters(browser: Browser, origin: string): Promis
     assert.equal(await page.locator(".usage-chip").nth(1).evaluate((chip) => chip.classList.contains("is-high")), true);
     assert.deepEqual(await page.locator(".usage-chip").evaluateAll((chips) => chips.map((chip) => chip.classList.contains("is-fast"))), [true, true, false]);
     assert.equal(await strip.evaluate((el) => el.scrollWidth <= el.clientWidth), true, "the chips fit beside Settings");
+    // fork: no Settings in the footer from 769px (the gear has it), so the meters have the row
     const [settings, meters] = await Promise.all([page.locator(".sidebar-footer-row .sidebar-footer-action").boundingBox(), strip.boundingBox()]);
-    assert.ok(settings && meters && settings.x + settings.width <= meters.x, "Settings and the meters do not overlap");
+    assert.ok(settings === null && meters !== null, "the footer leaves Settings to the gear and shows the meters");
 
     await strip.click();
     const popover = page.getByRole("dialog", { name: "Subscription usage", exact: true });
@@ -153,7 +155,8 @@ export async function checkUsageMeters(browser: Browser, origin: string): Promis
     await strip.waitFor({ state: "detached" });
     const before = asked.length;
     await page.reload();
-    await page.locator(".sidebar-footer").waitFor();
+    // fork: with nothing to show the footer is gone from 769px; the gear says the sidebar is up
+    await settingsButton.waitFor();
     assert.equal(asked.length, before, "a hidden strip asks for nothing");
     assert.deepEqual(errors, []);
   } finally {
