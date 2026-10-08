@@ -13,7 +13,7 @@ import { NewSessionDialog, type NewTabTarget } from "./components/NewSessionDial
 import { TabStrip } from "./components/TabStrip.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import { onSettingsHistory, recordSettings, settingsEntry } from "./lib/settingsHistory.ts";
-import { isNavigation, linkSearch, linksSomewhere, NAV_KEY, readLink, resolveLink, slugOf, type AppLink, type LinkNote } from "./lib/deepLink.ts";
+import { isNavigation, linkSearch, linksSomewhere, NAV_KEY, readLink, resolveLink, slugOf, type AppLink, type CreateDraft, type LinkNote } from "./lib/deepLink.ts";
 import { copyText } from "./lib/clipboard.ts";
 import { Link as LinkIcon } from "lucide-react";
 import { CommandPalette } from "./components/CommandPalette.tsx";
@@ -272,6 +272,12 @@ export function App() {
   }), [closeSettings]);
   useEffect(() => { if (!settingsOpen) recordSettings([]); }, [settingsOpen]);
   const [newSessionOpen, setNewSessionOpen] = useState(false);
+  // the New workspace dialog in the address (lib/deepLink.ts): the fields a link filled for this
+  // opening, and what the fields say now
+  const [newPrefill, setNewPrefill] = useState<Omit<CreateDraft, "kind"> | null>(null);
+  const [newFields, setNewFields] = useState<Omit<CreateDraft, "kind"> | null>(null);
+  // a link to the dialog, opened once the PCs are in (a tab, once its workspace is found)
+  const pendingCreate = useRef<CreateDraft | null>(initialLink?.create ?? null);
   // the dialog makes a tab in this workspace instead of a workspace, while set
   const [newTab, setNewTab] = useState<NewTabTarget | null>(null);
   const [connected, setConnected] = useState(false);
@@ -550,6 +556,8 @@ export function App() {
     setSelectedMachineId(machineId); setSelectedPaneId(paneId); setAutoSelected(false); setDrawerOpen(false);
     setOutputStopped(false);
     storeSelection(machineId, paneId);
+    // a pane picked (a tapped notification, the sidebar, Back) before a link landed supersedes the link
+    pendingLink.current = null; pendingFile.current = null; setLinkLanded(true);
   }, []);
   const selectTargetRef = useRef(selectTarget); selectTargetRef.current = selectTarget;
   useEffect(() => {
@@ -589,6 +597,7 @@ export function App() {
   }, [selectedMachineId, selectedPaneId]);
 
   const selectPane = useCallback((paneId: string) => {
+    pendingLink.current = null; pendingFile.current = null; setLinkLanded(true);
     setSelectedPaneId(paneId);
     setAutoSelected(false);
     setDrawerOpen(false);
@@ -642,6 +651,7 @@ export function App() {
   // itself replace the entry. Nothing is written while locked or before the roster is in, so a
   // link survives the access gate and a slow first read.
   const writtenLink = useRef<AppLink | null>(null);
+  const newSessionOpenRef = useRef(newSessionOpen); newSessionOpenRef.current = newSessionOpen;
   const linkWorkspaceId = selectedPane?.workspace_id ?? (selectedPaneId === null ? null : undefined);
   const linkSlug = slugOf(selectedWorkspace?.label) || null;
   const linkFile = viewing && viewing.machineId === selectedMachineId && viewing.paneId === selectedPaneId ? viewing.path : null;
@@ -650,6 +660,7 @@ export function App() {
     const link: AppLink = {
       machine: selectedMachineId, workspace: linkWorkspaceId, workspaceSlug: linkSlug, pane: selectedPaneId, view: selectedPaneId ? view : null, file: linkFile,
       settings: settingsOpen ? settingsPage : null, section: settingsOpen && settingsPage === settingsLinkPage ? settingsLinkSection : null,
+      create: newSessionOpen ? { kind: newTab ? "tab" : "workspace", cwd: newFields?.cwd ?? null, name: newFields?.name ?? null, agent: newFields?.agent ?? null } : null,
     };
     const previous = writtenLink.current;
     writtenLink.current = link;
@@ -657,9 +668,10 @@ export function App() {
     // Back and Forward land where the address already says: nothing to write
     if (search === window.location.search) return;
     const url = `${window.location.pathname}${search}${window.location.hash}`;
-    if (previous !== null && !autoSelected && !settingsOpen && isNavigation(previous, link)) window.history.pushState({ [NAV_KEY]: true }, "", url);
+    if (previous !== null && !autoSelected && !settingsOpen && !newSessionOpen && isNavigation(previous, link)) window.history.pushState({ [NAV_KEY]: true }, "", url);
     else window.history.replaceState(window.history.state, "", url);
-  }, [locked, machines.length, linkLanded, selectedMachineId, selectedPaneId, linkWorkspaceId, linkSlug, linkFile, view, settingsOpen, settingsPage, settingsLinkPage, settingsLinkSection, autoSelected]);
+  }, [locked, machines.length, linkLanded, selectedMachineId, selectedPaneId, linkWorkspaceId, linkSlug, linkFile, view, settingsOpen, settingsPage, settingsLinkPage, settingsLinkSection, newSessionOpen, newTab, newFields, autoSelected]);
+
 
   // a file a link named opens over its pane once the pane is shown, as the chat's file links do
   useEffect(() => {
@@ -678,6 +690,9 @@ export function App() {
     const onPop = (event: PopStateEvent): void => {
       if (settingsEntry(event.state) !== null) return;
       const link = readLink(window.location.search);
+      // the New workspace dialog is part of the address it was open on: Back closes it, Forward opens it again
+      if (!link.create) setNewSessionOpen(false);
+      else if (!newSessionOpenRef.current) pendingCreate.current = link.create;
       const machine = machinesRef.current.find((candidate) => candidate.id === link.machine);
       const pane = machine?.snapshot ? resolveLink(machine.snapshot, link).pane : link.pane;
       if (pane === null) return;
@@ -693,6 +708,7 @@ export function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
 
   // The Alerts item says what this device does, whatever the browser's permission: in-app alerts
   // need none, so they count as on. A device that has not answered the permission question is
@@ -800,6 +816,28 @@ export function App() {
   // the condition its button had. At phone width the palette's button gives its room to the
   // pane's title, and the palette is the menu's first item.
   const paletteItem: RowMenuItem = { id: "palette", label: t("Command palette"), icon: Search, run: () => setPaletteOpen(true) };
+  // a link to the New workspace dialog opens it once the PCs are in; one for a tab, once the
+  // linked workspace's pane is selected (its folder is the workspace's, as the tab strip's + does)
+  const [createTick, setCreateTick] = useState(0);
+  useEffect(() => {
+    const linked = pendingCreate.current;
+    if (linked === null || !linkLanded || machines.length === 0 || newSessionOpen) return;
+    if (linked.kind === "tab" && !selectedPane) return;
+    pendingCreate.current = null;
+    const fields = { cwd: linked.cwd, name: linked.name, agent: linked.agent };
+    setNewPrefill(fields);
+    setNewFields(fields);
+    if (linked.kind === "tab") actions.openNewTab({ machineId: selectedMachineId, workspaceId: selectedPane!.workspace_id });
+    else { setNewSessionMachineId(selectedMachineId); setNewTab(null); setNewSessionOpen(true); }
+  }, [linkLanded, machines.length, newSessionOpen, selectedPane, selectedMachineId, actions, createTick]);
+  // Forward onto an entry the dialog was open on: the popstate above leaves it pending
+  useEffect(() => {
+    const onPop = (): void => setCreateTick((tick) => tick + 1);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const closeNewSession = useCallback(() => { setNewSessionOpen(false); setNewPrefill(null); setNewFields(null); }, []);
+
   const moreItems: RowMenuItem[] = [
     ...(selectedPane && selectedWorkspace
       ? [{ id: "new-tab", label: t("New tab"), title: t("New tab in {workspace}", { workspace: selectedWorkspace.label }), icon: Plus, run: () => actions.openNewTab() }]
@@ -1015,9 +1053,11 @@ export function App() {
         open={newSessionOpen}
         tab={newTab}
         defaultCwd={newSessionMachineId === selectedMachineId ? selectedPane?.cwd ?? null : null}
-        onClose={() => setNewSessionOpen(false)}
+        prefill={newPrefill}
+        onDraft={setNewFields}
+        onClose={closeNewSession}
         onCreated={(paneId) => {
-          setNewSessionOpen(false);
+          closeNewSession();
           selectTarget(newSessionMachineId, paneId);
           void load();
         }}

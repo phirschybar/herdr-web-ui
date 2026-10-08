@@ -27,14 +27,28 @@ export interface NewSessionDialogProps {
   tab?: NewTabTarget | null;
   onClose: () => void;
   onCreated: (paneId: string) => void;
+  /** fields a link fills for this opening (`?new=`, lib/deepLink.ts); an agent herdr does not offer is left out */
+  prefill?: DialogFields | null;
+  /** what the fields say, a moment after they change, for the address */
+  onDraft?: (fields: DialogFields) => void;
 }
+
+export interface DialogFields {
+  cwd: string | null;
+  name: string | null;
+  /** "" is a shell; null keeps the last agent picked */
+  agent: string | null;
+}
+
+/** how long the fields rest before the address follows them: Safari refuses a burst of history writes */
+const DRAFT_MS = 400;
 
 function directoryBasename(value: string): string {
   const trimmed = value.replace(/\/+$/, "");
   return trimmed.split("/").pop() ?? "";
 }
 
-export function NewSessionDialog({ open, defaultCwd, tab = null, onClose, onCreated, machineName }: NewSessionDialogProps) {
+export function NewSessionDialog({ open, defaultCwd, tab = null, onClose, onCreated, machineName, prefill = null, onDraft }: NewSessionDialogProps) {
   const t = useT();
   const machineId = useMachineId();
   const { createTab, createWorkspace, fetchAgentKinds } = useMachineApi();
@@ -50,23 +64,28 @@ export function NewSessionDialog({ open, defaultCwd, tab = null, onClose, onCrea
   const surface = useFocusTrap<HTMLFormElement>(open, { initialFocus: firstFieldRef });
   const defaultCwdRef = useRef(defaultCwd);
   defaultCwdRef.current = defaultCwd;
+  const prefillRef = useRef(prefill);
+  prefillRef.current = prefill;
 
   useEffect(() => {
     if (!open) return;
-    setCwd(defaultCwdRef.current ?? "");
-    setName("");
+    const filled = prefillRef.current;
+    setCwd(filled?.cwd ?? defaultCwdRef.current ?? "");
+    setName(filled?.name ?? "");
     setError(null);
     setPending(false);
     setCreatedPaneId(null);
     setBrowsing(false);
-    const stored = rememberedAgent();
+    const remembered = rememberedAgent();
+    const stored = filled?.agent ?? remembered;
     setAgentKind(stored);
     let cancelled = false;
     void fetchAgentKinds()
       .then((next) => {
         if (cancelled) return;
         setAgents(next);
-        if (stored && !next.some((agent) => agent.kind === stored)) setAgentKind("");
+        // a linked agent herdr does not offer gives way to the last one picked, as an unknown remembered one does to a shell
+        if (stored && !next.some((agent) => agent.kind === stored)) setAgentKind(stored !== remembered && next.some((agent) => agent.kind === remembered) ? remembered : "");
       })
       .catch((reason: unknown) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason));
@@ -75,6 +94,12 @@ export function NewSessionDialog({ open, defaultCwd, tab = null, onClose, onCrea
       cancelled = true;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !onDraft) return;
+    const timer = window.setTimeout(() => onDraft({ cwd: cwd || null, name: name || null, agent: agentKind }), DRAFT_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, onDraft, cwd, name, agentKind]);
 
   useEffect(() => {
     if (!open) return;

@@ -176,6 +176,37 @@ try {
         assert.equal(await page.evaluate(() => navigator.clipboard.readText()), page.url());
       });
       console.log("PASS Copy link puts the address on the clipboard");
+
+      // a link to the New workspace dialog fills its fields and creates nothing by itself; the
+      // address follows what is typed, and closing the dialog takes it off
+      await withPage(browser, `?new=workspace&cwd=${encodeURIComponent("/home/demo/infra")}&name=Fix%20backup&agent=codex`, async (page) => {
+        const dialog = page.getByRole("dialog", { name: /New workspace/ });
+        await dialog.waitFor();
+        assert.equal(await page.locator("#new-session-cwd").inputValue(), "/home/demo/infra");
+        assert.equal(await dialog.getByRole("textbox", { name: "Name" }).inputValue(), "Fix backup");
+        await dialog.locator(".agent-picker-label", { hasText: /codex/i }).waitFor();
+        const workspaces = async () => (await page.evaluate(async () => (await (await fetch("/api/session")).json()).snapshot.workspaces.length)) as number;
+        const before = await workspaces();
+        await page.waitForTimeout(800);
+        assert.equal(await workspaces(), before, "a link fills the form; Create is still the user's");
+        await waitQuery(page, "name", "Fix backup");
+        await dialog.getByRole("textbox", { name: "Name" }).fill("Fix the nightly backup");
+        await waitQuery(page, "name", "Fix the nightly backup");
+        assert.equal((await query(page))["new"], "workspace");
+        await page.keyboard.press("Escape");
+        await dialog.waitFor({ state: "detached" });
+        await waitQuery(page, "new", null);
+        await waitQuery(page, "name", null);
+      });
+      // an agent herdr does not offer is left out, and a tab link opens the dialog for the linked workspace
+      await withPage(browser, `?ws=${wsOf(INFRA)}-infra&new=tab&agent=nope`, async (page) => {
+        const dialog = page.getByRole("dialog", { name: /New tab · infra/ });
+        await dialog.waitFor();
+        await waitQuery(page, "new", "tab");
+        // the dialog drops it once herdr's agents are in, and the address follows a moment later
+        await page.waitForFunction(() => new URLSearchParams(window.location.search).get("agent") !== "nope", undefined, { timeout: 5_000 });
+      });
+      console.log("PASS a link to the New workspace dialog fills it and creates nothing; the address follows the fields, and a tab link opens it for its workspace");
     } finally {
       await browser.close();
     }

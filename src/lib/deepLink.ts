@@ -2,6 +2,11 @@
  * The address says where the app is, so any moment can be linked to and returned to:
  *
  *   ?machine=<pc>&ws=<id>-<slug>&pane=<pane>&view=chat|terminal&file=<path>&settings=<page>&section=<group>
+ *   ?new=workspace|tab&cwd=<folder>&name=<name>&agent=<kind>
+ *
+ * `new` opens the New workspace dialog (a tab in the linked workspace with `tab`), its fields
+ * filled from the link and the address following what is typed. A link never creates anything:
+ * it fills the form, and Create is still the user's.
  *
  * `machine` is left out for the local PC; `pane` and `machine` are the names a tapped
  * notification already opens the app with (public/sw.js). `ws` is herdr's workspace id, then a
@@ -29,11 +34,26 @@ export interface AppLink {
   settings: string | null;
   /** a group on the Settings page (`data-section` on its SettingsGroup) */
   section?: string | null;
+  /** the New workspace dialog, and what its fields say */
+  create?: CreateDraft | null;
 }
+
+export interface CreateDraft {
+  /** a workspace, or a tab in the linked workspace */
+  kind: "workspace" | "tab";
+  cwd: string | null;
+  name: string | null;
+  /** an agent kind herdr names (the dialog keeps it only when herdr offers it); "" is a shell */
+  agent: string | null;
+}
+
+/** what a link may put in the dialog's fields: no more than a person would type */
+const FIELD_MAX = { cwd: 1024, name: 120 } as const;
+const AGENT_KIND = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 
 const LOCAL = "local";
 /** the query names this module owns; anything else in the address is left as it is */
-const OWN = ["machine", "ws", "pane", "view", "file", "settings", "section"] as const;
+const OWN = ["machine", "ws", "pane", "view", "file", "settings", "section", "new", "cwd", "name", "agent"] as const;
 /** a slug stays this short, cut at a word where it can be: a link names the workspace, it does not spell it out */
 const SLUG_MAX = 24;
 
@@ -68,7 +88,16 @@ export function readLink(search: string): AppLink {
     file: named(query.get("file")),
     settings,
     section: settings ? named(query.get("section")) : null,
+    create: readCreate(query),
   };
+}
+
+function readCreate(query: URLSearchParams): CreateDraft | null {
+  const kind = query.get("new");
+  if (kind !== "workspace" && kind !== "tab") return null;
+  const field = (name: "cwd" | "name") => named(query.get(name))?.slice(0, FIELD_MAX[name]) ?? null;
+  const agent = query.get("agent");
+  return { kind, cwd: field("cwd"), name: field("name"), agent: agent === "" || agent === "shell" ? "" : agent && AGENT_KIND.test(agent) ? agent : null };
 }
 
 /** Whether an address names a place at all, as opposed to the app's own start. */
@@ -88,6 +117,12 @@ export function linkSearch(link: AppLink, current = ""): string {
   if (link.pane && link.file) query.set("file", link.file);
   if (link.settings) query.set("settings", link.settings);
   if (link.settings && link.section) query.set("section", link.section);
+  if (link.create) {
+    query.set("new", link.create.kind);
+    if (link.create.cwd) query.set("cwd", link.create.cwd);
+    if (link.create.name) query.set("name", link.create.name);
+    if (link.create.agent !== null) query.set("agent", link.create.agent === "" ? "shell" : link.create.agent);
+  }
   const text = query.toString();
   return text ? `?${text}` : "";
 }
