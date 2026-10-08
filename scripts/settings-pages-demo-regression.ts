@@ -99,7 +99,10 @@ try {
         const dialog = dialogOf(page);
         const list = dialog.getByRole("tablist");
 
-        // Back steps out one screen at a time: the key bar editor, the page, the list, and only then nothing
+        // Back steps out one screen at a time: the key bar editor, the page, the list, and only then nothing.
+        // The address names the pane shown (lib/deepLink.ts) once the roster is in: that is where Back returns
+        await page.waitForFunction(() => new URLSearchParams(window.location.search).has("pane"));
+        const before = page.url();
         await openSettings(page);
         assert.deepEqual(await entryOf(page), { page: null, keyBar: false, depth: 1 });
         await openSettingsPage(page, "Terminal");
@@ -115,7 +118,7 @@ try {
         await page.goBack();
         await page.locator(".settings-dialog").waitFor({ state: "detached" });
         assert.equal(await entryOf(page), null);
-        assert.equal(page.url(), url, "the last Back closes Settings and leaves the app where it was");
+        assert.equal(page.url(), before, "the last Back closes Settings and leaves the app where it was");
         await page.locator(".conn-live").waitFor({ state: "attached" });
         console.log("PASS Back on a phone leaves the key bar editor, then the page, then the list, and stays in the app");
 

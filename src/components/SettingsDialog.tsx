@@ -32,6 +32,10 @@ export interface SettingsDialogProps {
   open: boolean;
   /** the section to open on, for a button that points at it; the top otherwise */
   section?: "updates" | null;
+  /** the page a link to Settings names (`?settings=`, lib/deepLink.ts), for this opening alone */
+  linkPage?: string | null;
+  /** the page shown, for the address; null while a phone shows its list of pages */
+  onPage?: (page: string | null) => void;
   onClose: () => void;
   actions: AppActions;
   updates: UpdatesModel;
@@ -563,19 +567,21 @@ export function SettingsDialog(props: SettingsDialogProps) {
   return props.open ? <OpenSettingsDialog {...props} /> : null;
 }
 
-function OpenSettingsDialog({ section = null, onClose, actions, updates, auth, herdrVersion, onEnableNotifications, overPreview = false }: SettingsDialogProps) {
+function OpenSettingsDialog({ section = null, linkPage = null, onPage, onClose, actions, updates, auth, herdrVersion, onEnableNotifications, overPreview = false }: SettingsDialogProps) {
   const t = useT();
   const narrow = useNarrow();
   // opened by Forward, the dialog shows what that entry of the history showed
   const [restored] = useState(() => shownBy(settingsEntry(window.history.state)));
   // a phone opens on the list of pages; a wider dialog shows the list beside the first page. A
   // button that points at Updates opens on About whatever an entry still landing would restore
-  const [chosen, setChosen] = useState<SettingsPage | null>(section === "updates" ? "about" : restored ? restored.page : null);
+  const linked = PAGES.find((candidate) => candidate.id === linkPage)?.id ?? null;
+  const [chosen, setChosen] = useState<SettingsPage | null>(section === "updates" ? "about" : restored ? restored.page : linked);
   const page = chosen ?? (narrow ? null : PAGES[0]!.id);
   const [keyBarOpen, setKeyBarOpen] = useState(section === "updates" ? false : restored?.keyBar ?? false);
   // every step in is an entry of the history, so the system Back button takes one step out
   // (lib/settingsHistory.ts); the Back control, the X and Escape take the same entries off
   useEffect(() => { recordSettings(settingsLevels(narrow, page, keyBarOpen)); }, [narrow, page, keyBarOpen]);
+  useEffect(() => { onPage?.(page); }, [onPage, page]);
   useEffect(() => onSettingsHistory((entry, own) => {
     const view = own ? null : shownBy(entry);
     if (view === null) return;
