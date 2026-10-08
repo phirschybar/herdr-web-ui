@@ -39,6 +39,7 @@ import { OpenFileContext } from "../lib/filePaths.ts";
 import { fileUriPath, isWebLink, terminalFileLinkProvider } from "../lib/terminalFileLinks.ts";
 import { adjustTerminalGlyphs } from "../lib/terminalGlyphs.ts";
 import { useMediaQuery } from "../lib/useMediaQuery.ts";
+import { modalOpen } from "../lib/focus.ts";
 
 /** How long a resize must rest before the grid refits and the pty follows it. */
 const RESIZE_SETTLE_MS = 120;
@@ -1252,7 +1253,7 @@ export function PaneTerminal({
     }
     const pane = paneRef.current;
     if (pane && term) socketRef.current?.resize(pane, term.cols, term.rows, true);
-    if (!autoSelected && !coarseRef.current) term?.focus();
+    if (!autoSelected && !coarseRef.current && !modalOpen()) term?.focus();
   }, [chatView]);
 
   // Reset synchronously on pane changes: old composition timers must never see the new pane.
@@ -1294,7 +1295,7 @@ export function PaneTerminal({
     socket.attach(paneId, term.cols, term.rows, chatViewRef.current);
     // the chat lens covers the grid and its composer takes the keyboard: focusing the hidden
     // grid sent the keys straight to the pane, and showed a phone's IME text mid-screen
-    if (!chatViewRef.current && !autoSelected && !coarseRef.current) term.focus();
+    if (!chatViewRef.current && !autoSelected && !coarseRef.current && !modalOpen()) term.focus();
     return () => {
       socket.detach(paneId);
       if (pendingScopeRef.current !== null) pendingMessages.suspend(paneStorageId(machineId, paneId), pendingScopeRef.current);

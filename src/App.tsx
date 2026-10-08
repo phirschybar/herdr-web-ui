@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bell, Ellipsis, FolderOpen, Lock, Menu, MessageSquare, PanelLeft, Plus, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderOpen, Link, Lock, Menu, MessageSquare, PanelLeft, Plus, Search, SquareTerminal, X } from "lucide-react";
 
 import type { AgentStatus, ClientRole, ServerMessage, AccessRefusal, HealthAuth, HerdrPane } from "../shared/protocol.ts";
 import { ApiError, authenticate, fetchHealth, fetchBridgeHealth, fetchMachines, fetchSession, pairDevice, sendTestPush, signOut, type HealthInfo } from "./lib/api.ts";
@@ -13,7 +13,8 @@ import { NewSessionDialog, type NewTabTarget } from "./components/NewSessionDial
 import { TabStrip } from "./components/TabStrip.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import { onSettingsHistory, recordSettings, settingsEntry } from "./lib/settingsHistory.ts";
-import { isNavigation, linkSearch, linksSomewhere, NAV_KEY, readLink, workspacePane, type AppLink } from "./lib/deepLink.ts";
+import { isNavigation, linkSearch, linksSomewhere, NAV_KEY, readLink, resolveLink, slugOf, type AppLink, type LinkNote } from "./lib/deepLink.ts";
+import { copyText } from "./lib/clipboard.ts";
 import { CommandPalette } from "./components/CommandPalette.tsx";
 import { MachineContext } from "./lib/machineContext.tsx";
 import { MachineActionBanner, MachineSidebar } from "./components/MachineSidebar.tsx";
@@ -196,8 +197,19 @@ export function App() {
     if (initialLink?.workspace) return null;
     return storedSelection()?.pane_id ?? null;
   });
-  // the workspace a link named: the pane to open when the link names none, or the one it names has closed
-  const linkWorkspace = useRef(initialLink?.workspace ?? null);
+  // the place a link named, settled against the PC's roster once it is in (lib/deepLink.ts resolveLink)
+  const pendingLink = useRef<AppLink | null>(initialLink && (initialLink.pane || initialLink.workspace) ? initialLink : null);
+  // state, not only the ref: what waits on the link landing (the address, its file) runs again when it does
+  const [linkLanded, setLinkLanded] = useState(() => pendingLink.current === null);
+  // the file a link named, opened over its pane once that pane is shown
+  const pendingFile = useRef<string | null>(initialLink?.pane ? initialLink.file ?? null : null);
+  // a short word in the header: a link that could not open what it named, or a link copied
+  const [headerNote, setHeaderNote] = useState<LinkNote | "copied" | null>(null);
+  useEffect(() => {
+    if (headerNote === null) return;
+    const timer = window.setTimeout(() => setHeaderNote(null), headerNote === "copied" ? 1600 : 8000);
+    return () => window.clearTimeout(timer);
+  }, [headerNote]);
   // App picked the selected pane itself because the one selected closed: it must not raise a
   // phone's keyboard (over the drawer the close was tapped in) until the user picks a pane or lens
   const [autoSelected, setAutoSelected] = useState(false);
@@ -238,11 +250,18 @@ export function App() {
   // a link to Settings opens it on its page, for that first opening alone
   const [settingsOpen, setSettingsOpen] = useState(() => initialLink?.settings != null);
   const [settingsLinkPage, setSettingsLinkPage] = useState<string | null>(() => initialLink?.settings ?? null);
+  // the group on that page a link named: in the address while that page is shown
+  const [settingsLinkSection, setSettingsLinkSection] = useState<string | null>(() => initialLink?.section ?? null);
   // the page Settings shows, for the address
   const [settingsPage, setSettingsPage] = useState<string | null>(null);
   // set by a button that points at one section of Settings, for that opening alone
   const [settingsSection, setSettingsSection] = useState<"updates" | null>(null);
-  const closeSettings = useCallback(() => { setSettingsOpen(false); setSettingsSection(null); setSettingsLinkPage(null); setSettingsPage(null); }, []);
+  const closeSettings = useCallback(() => { setSettingsOpen(false); setSettingsSection(null); setSettingsLinkPage(null); setSettingsLinkSection(null); setSettingsPage(null); }, []);
+  const settingsLinkPageRef = useRef(settingsLinkPage); settingsLinkPageRef.current = settingsLinkPage;
+  const onSettingsPage = useCallback((page: string | null) => {
+    setSettingsPage(page);
+    if (page !== settingsLinkPageRef.current) setSettingsLinkSection(null);
+  }, []);
   // Settings is in the history (lib/settingsHistory.ts): Back out of its last entry closes it,
   // Forward onto one opens it again, and closing it any other way takes its entries off
   useEffect(() => onSettingsHistory((entry, own) => {
@@ -536,11 +555,23 @@ export function App() {
     // An offline PC's cached roster cannot invalidate a selection. Once connected,
     // a closed pane (including one remembered across reloads) must release its selection.
     if (!snapshot || selectedMachine?.state !== "connected") return;
-    // the selection stands: a linked workspace has done its job
-    if (snapshot.panes.some((pane) => pane.pane_id === selectedPaneId)) { linkWorkspace.current = null; return; }
-    // a linked workspace first (lib/deepLink.ts), then the pane herdr has in front
-    const fallback = (current: typeof snapshot) => (linkWorkspace.current ? workspacePane(current, linkWorkspace.current) : null)
-      ?? current.panes.find((pane) => pane.pane_id === current.focused_pane_id)?.pane_id ?? current.panes[0]?.pane_id ?? null;
+    // a link lands once its PC's roster is in: its pane, the pane its workspace's row opens, or,
+    // when nothing it named is open, the usual fallback below with a word in the header
+    const linked = pendingLink.current;
+    if (linked && linked.machine === selectedMachineId) {
+      pendingLink.current = null;
+      setLinkLanded(true);
+      const landed = resolveLink(snapshot, linked);
+      if (landed.note) setHeaderNote(landed.note);
+      if (landed.pane) {
+        if (landed.pane !== selectedPaneId) { storeLinkView({ ...linked, pane: landed.pane }); setSelectedPaneId(landed.pane); }
+        if (landed.pane !== linked.pane) pendingFile.current = null;
+        return;
+      }
+      pendingFile.current = null;
+    }
+    if (snapshot.panes.some((pane) => pane.pane_id === selectedPaneId)) return;
+    const fallback = (current: typeof snapshot) => current.panes.find((pane) => pane.pane_id === current.focused_pane_id)?.pane_id ?? current.panes[0]?.pane_id ?? null;
     if (selectedPaneId === null) { setSelectedPaneId(fallback(snapshot)); return; }
     // The combined roster is cached: a newly created pane can be selected before it
     // appears there. Confirm absence against this PC before discarding the selection.
@@ -611,9 +642,14 @@ export function App() {
   // link survives the access gate and a slow first read.
   const writtenLink = useRef<AppLink | null>(null);
   const linkWorkspaceId = selectedPane?.workspace_id ?? (selectedPaneId === null ? null : undefined);
+  const linkSlug = slugOf(selectedWorkspace?.label) || null;
+  const linkFile = viewing && viewing.machineId === selectedMachineId && viewing.paneId === selectedPaneId ? viewing.path : null;
   useEffect(() => {
-    if (locked !== false || machines.length === 0 || linkWorkspaceId === undefined) return;
-    const link: AppLink = { machine: selectedMachineId, workspace: linkWorkspaceId, pane: selectedPaneId, view: selectedPaneId ? view : null, settings: settingsOpen ? settingsPage : null };
+    if (locked !== false || machines.length === 0 || linkWorkspaceId === undefined || !linkLanded) return;
+    const link: AppLink = {
+      machine: selectedMachineId, workspace: linkWorkspaceId, workspaceSlug: linkSlug, pane: selectedPaneId, view: selectedPaneId ? view : null, file: linkFile,
+      settings: settingsOpen ? settingsPage : null, section: settingsOpen && settingsPage === settingsLinkPage ? settingsLinkSection : null,
+    };
     const previous = writtenLink.current;
     writtenLink.current = link;
     const search = linkSearch(link, window.location.search);
@@ -622,7 +658,18 @@ export function App() {
     const url = `${window.location.pathname}${search}${window.location.hash}`;
     if (previous !== null && !autoSelected && !settingsOpen && isNavigation(previous, link)) window.history.pushState({ [NAV_KEY]: true }, "", url);
     else window.history.replaceState(window.history.state, "", url);
-  }, [locked, machines.length, selectedMachineId, selectedPaneId, linkWorkspaceId, view, settingsOpen, settingsPage, autoSelected]);
+  }, [locked, machines.length, linkLanded, selectedMachineId, selectedPaneId, linkWorkspaceId, linkSlug, linkFile, view, settingsOpen, settingsPage, settingsLinkPage, settingsLinkSection, autoSelected]);
+
+  // a file a link named opens over its pane once the pane is shown, as the chat's file links do
+  useEffect(() => {
+    const path = pendingFile.current;
+    // a viewer already up (a reload restores it from its history entry) is the file the address names:
+    // the link has nothing left to open, and a Back that closes the viewer must not bring it back
+    if (viewing) { pendingFile.current = null; return; }
+    if (path === null || !linkLanded || !selectedPane) return;
+    pendingFile.current = null;
+    openFile({ path, paneId: selectedPane.pane_id, machineId: selectedMachineId });
+  }, [linkLanded, selectedPane, selectedMachineId, viewing, openFile]);
 
   // Back and Forward between panes: the entry's address says which one. Settings' own entries
   // are its module's (lib/settingsHistory.ts)
@@ -631,10 +678,9 @@ export function App() {
       if (settingsEntry(event.state) !== null) return;
       const link = readLink(window.location.search);
       const machine = machinesRef.current.find((candidate) => candidate.id === link.machine);
-      const pane = link.pane ?? (link.workspace && machine?.snapshot ? workspacePane(machine.snapshot, link.workspace) : null);
+      const pane = machine?.snapshot ? resolveLink(machine.snapshot, link).pane : link.pane;
       if (pane === null) return;
       storeLinkView({ ...link, pane });
-      linkWorkspace.current = link.workspace;
       const current = selectionRef.current;
       if (current.machineId !== link.machine || current.paneId !== pane) { selectTargetRef.current(link.machine, pane); return; }
       // the same pane: the entry landed on may still say what is no longer shown (the address a
@@ -758,6 +804,8 @@ export function App() {
       ? [{ id: "new-tab", label: t("New tab"), title: t("New tab in {workspace}", { workspace: selectedWorkspace.label }), icon: Plus, run: () => actions.openNewTab() }]
       : []),
     ...(selectedPane ? [{ id: "files", label: t("Browse files"), icon: FolderOpen, run: () => setFilesOpen(true) }] : []),
+    // the address says where the app is (lib/deepLink.ts); a phone has no address bar to copy it from
+    { id: "copy-link", label: t("Copy link"), icon: Link, run: () => void copyText(window.location.href).then((ok) => { if (ok) setHeaderNote("copied"); }) },
     ...(bellVisible ? [{ id: "alerts", label: t("Alerts"), hint: bell.state, checked: bell.on, title: bell.title, icon: Bell, run: () => void bell.run() }] : []),
   ];
 
@@ -869,6 +917,7 @@ export function App() {
             <span className="conn-text">{connWord}</span>
           </span>
           {!targetHerdr && <span className="pill pill-offline">{t("herdr offline")}</span>}
+          {headerNote && <span className="pill header-note" role="status">{t(headerNote === "copied" ? "Link copied" : headerNote === "pane-closed" ? "That agent has closed: its workspace is open" : "That link's workspace is closed")}</span>}
           {canSignOut && (
             <button type="button" className="icon-button lock-button header-desktop-only" aria-label={t("Sign out")} title={t("Sign out")} onClick={() => void lock()}>
               <Lock />
@@ -980,7 +1029,7 @@ export function App() {
         setFilesOpen(false);
         selectTargetRef.current(machineId, paneId);
       }} />
-      <SettingsDialog auth={auth} herdrVersion={health?.herdr?.version ?? null} open={settingsOpen} section={settingsSection} linkPage={settingsLinkPage} onPage={setSettingsPage} onClose={closeSettings} actions={actions} updates={updates} onEnableNotifications={enableNotifications} overPreview={viewing !== null} />
+      <SettingsDialog auth={auth} herdrVersion={health?.herdr?.version ?? null} open={settingsOpen} section={settingsSection} linkPage={settingsLinkPage} linkSection={settingsLinkSection} onPage={onSettingsPage} onClose={closeSettings} actions={actions} updates={updates} onEnableNotifications={enableNotifications} overPreview={viewing !== null} />
       {filesOpen && selectedPane && (
         <FilesDialog start={selectedPane.foreground_cwd ?? selectedPane.cwd ?? ""} viewing={viewing !== null} onOpenFile={viewFile} onClose={() => setFilesOpen(false)} />
       )}

@@ -65,7 +65,7 @@ try {
         await waitSelected(page, INFRA);
         await waitQuery(page, "pane", INFRA);
         const named = await query(page);
-        assert.equal(named["ws"], wsOf(INFRA));
+        assert.equal(named["ws"], `${wsOf(INFRA)}-infra`, "ws names the workspace by id and slug");
         assert.ok(named["view"] === "chat" || named["view"] === "terminal", JSON.stringify(named));
         assert.equal(named["machine"], undefined, "the local PC is not written");
       });
@@ -111,6 +111,71 @@ try {
         await waitQuery(page, "pane", INFRA);
       });
       console.log("PASS a link to a Settings page opens it there, the address follows its pages, and closing it leaves the pane's address");
+
+      // ws carries the workspace's name as a slug; a slug another workspace has wins over a reused id
+      const note = (page: Page) => page.locator(".header-note").textContent();
+      await withPage(browser, `?ws=${wsOf(INFRA)}`, async (page) => {
+        await waitQuery(page, "ws", `${wsOf(INFRA)}-infra`);
+      });
+      await withPage(browser, `?ws=${wsOf(panes.api)}-infra&pane=${encodeURIComponent(panes.api)}`, async (page) => {
+        await waitSelected(page, INFRA);
+        await waitQuery(page, "ws", `${wsOf(INFRA)}-infra`);
+        assert.equal(await note(page), "That agent has closed: its workspace is open");
+      });
+      await withPage(browser, `?ws=w9z-gone&pane=${encodeURIComponent("w9z:p1")}`, async (page) => {
+        await page.locator(".header-note").waitFor();
+        assert.equal(await note(page), "That link's workspace is closed");
+      });
+      console.log("PASS ws carries the workspace's slug; a slug that names another workspace wins over the id, and a link to nothing open says so");
+
+      // a link to a Settings group scrolls to it and focuses it; another page drops it from the address
+      await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&settings=chat&section=quick-replies`, async (page) => {
+        const dialog = page.getByRole("dialog", { name: "Settings" });
+        await dialog.waitFor();
+        await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset["section"] === "quick-replies");
+        await waitQuery(page, "section", "quick-replies");
+        await dialog.getByRole("tab", { name: "Appearance", exact: true }).click();
+        await waitQuery(page, "settings", "appearance");
+        await waitQuery(page, "section", null);
+      });
+      await withPage(browser, `?settings=about&section=updates`, async (page) => {
+        await page.waitForFunction(() => (document.activeElement as HTMLElement | null)?.dataset["section"] === "updates");
+      });
+      console.log("PASS a link to a Settings group scrolls to and focuses it, and another page drops it from the address");
+
+      // a link to a file opens it over its pane; closing the viewer takes it off the address
+      await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&file=README.md`, async (page) => {
+        await page.locator(".modal.file-viewer").waitFor();
+        await waitQuery(page, "file", "README.md");
+        await page.keyboard.press("Escape");
+        await page.locator(".modal.file-viewer").waitFor({ state: "detached" });
+        await waitQuery(page, "file", null);
+        await waitQuery(page, "pane", INFRA);
+      });
+      // a reload restores the viewer from its own entry; Back then closes it for good
+      await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&file=README.md`, async (page) => {
+        await page.locator(".modal.file-viewer").waitFor();
+        await page.reload();
+        await page.locator(".modal.file-viewer").waitFor();
+        await page.goBack();
+        await page.locator(".modal.file-viewer").waitFor({ state: "detached" });
+        for (const deadline = Date.now() + 1_500; Date.now() < deadline;) {
+          assert.equal(await page.locator(".modal.file-viewer").count(), 0, "the linked file does not open again after Back closed it");
+          await page.waitForTimeout(100);
+        }
+      });
+      console.log("PASS a link to a file opens it over its pane, and closing the viewer takes it off the address");
+
+      // Copy link puts the address on the clipboard and says so
+      await withPage(browser, `?ws=${wsOf(DOCS)}&pane=${encodeURIComponent(DOCS)}`, async (page) => {
+        await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+        await waitQuery(page, "pane", DOCS);
+        await page.locator(".header-more-button").click();
+        await page.getByRole("menuitem", { name: "Copy link" }).click();
+        await page.locator(".header-note", { hasText: "Link copied" }).waitFor();
+        assert.equal(await page.evaluate(() => navigator.clipboard.readText()), page.url());
+      });
+      console.log("PASS Copy link puts the address on the clipboard");
     } finally {
       await browser.close();
     }

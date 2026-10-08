@@ -34,6 +34,8 @@ export interface SettingsDialogProps {
   section?: "updates" | null;
   /** the page a link to Settings names (`?settings=`, lib/deepLink.ts), for this opening alone */
   linkPage?: string | null;
+  /** the group on that page a link names (`&section=`): it is scrolled to and focused, as Updates is */
+  linkSection?: string | null;
   /** the page shown, for the address; null while a phone shows its list of pages */
   onPage?: (page: string | null) => void;
   onClose: () => void;
@@ -199,7 +201,7 @@ function ChatPage() {
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Composer")}>
+      <SettingsGroup title={t("Composer")} section="composer">
         <SettingsRow label={t("Enter sends")} description={t("When off, Mod+Enter sends")}>
           <Toggle label={t("Enter sends")} checked={settings.enterSends} onChange={(enterSends) => update({ enterSends })} />
         </SettingsRow>
@@ -208,7 +210,7 @@ function ChatPage() {
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Quick replies")}>
+      <SettingsGroup title={t("Quick replies")} section="quick-replies">
         <SettingsRow label={t("Show above the message box")} description={t("One-tap messages above the message box, on this device. Each is sent as if typed: queued while the agent works, an answer when a question is open.")}>
           <Toggle label={t("Show above the message box")} checked={settings.showQuickReplies} onChange={(showQuickReplies) => update({ showQuickReplies })} />
         </SettingsRow>
@@ -341,7 +343,7 @@ function VoicePage() {
       </SettingsGroup>
 
       {settings.voiceInput !== "off" && (
-        <SettingsGroup title={t("Tidy dictated text")}>
+        <SettingsGroup title={t("Tidy dictated text")} section="tidy-dictation">
           <SettingsRow label={t("In chat")} description={t("Drops fillers and fixes spacing; code and paths stay as spoken")}>
             <Toggle label={t("Tidy dictated text in chat")} checked={settings.voicePolishChat} onChange={(voicePolishChat) => update({ voicePolishChat })} />
           </SettingsRow>
@@ -351,7 +353,7 @@ function VoicePage() {
         </SettingsGroup>
       )}
 
-      <SettingsGroup title={t("OpenAI API key")}>
+      <SettingsGroup title={t("OpenAI API key")} section="openai-key">
         <div className="settings-item">
           {voice && (
             <p className="settings-label voice-status">
@@ -399,7 +401,7 @@ function UsageAccounts({ providers }: { providers: readonly ProviderUsage[] }) {
   const keys = ordered.map((usage) => usage.key);
   const move = (key: string, by: -1 | 1) => update({ usageOrder: moveInOrder(keys, settings.usageOrder, key, by) });
   return (
-    <SettingsGroup title={t("Accounts")} className="usage-accounts">
+    <SettingsGroup title={t("Accounts")} className="usage-accounts" section="accounts">
       <ol aria-label={t("Accounts")}>
         {ordered.map((usage, index) => {
           const name = usageName(usage);
@@ -464,7 +466,7 @@ function ShortcutsPage() {
   const t = useT();
   return (
     <>
-      <SettingsGroup className="settings-shortcuts" note={t("Some keys are reserved by the browser. Changes apply to this device.")}>
+      <SettingsGroup className="settings-shortcuts" section="shortcuts" note={t("Some keys are reserved by the browser. Changes apply to this device.")}>
         {SHORTCUTS.map((shortcut) => (
           <SettingsRow key={shortcut.id} label={t(shortcut.label)}>
             {shortcut.id === "voice" ? <span className="settings-keys">{formatKeys(shortcut.keys).map((key) => <kbd className="kbd" key={key}>{key}</kbd>)}</span> : (
@@ -508,7 +510,7 @@ function DevicesPage({ auth }: { auth: HealthAuth | null }) {
   const pairUrl = plan.kind === "here" || plan.kind === "served" ? plan.url : isLoopbackHost(window.location.hostname) ? null : window.location.origin;
   return (
     <>
-      <SettingsGroup title={t("Phone")}>
+      <SettingsGroup title={t("Phone")} section="phone">
         <div className="settings-item"><PhonePanel plan={plan} loading={access === undefined} onRefresh={loadAccess} /></div>
         <SettingsRow label={t("Keep screen on")} description={t("While a terminal or chat pane is open. Requires HTTPS or localhost and a supported browser.")}>
           <Toggle label={t("Keep screen on")} checked={settings.keepScreenOn} onChange={(keepScreenOn) => update({ keepScreenOn })} />
@@ -518,7 +520,7 @@ function DevicesPage({ auth }: { auth: HealthAuth | null }) {
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Devices")}>
+      <SettingsGroup title={t("Devices")} section="devices">
         <div className="settings-item"><DevicesPanel pairUrl={pairUrl} auth={auth} /></div>
       </SettingsGroup>
     </>
@@ -549,7 +551,7 @@ function AboutPage({ updates, herdrVersion, bridgesFollow }: { updates: UpdatesM
     <>
       <UpdateControls updates={updates} bridgesFollow={bridgesFollow} />
       <HerdrUpdateControls enabled herdrVersion={herdrVersion} />
-      <SettingsGroup title={t("About")} className="settings-about">
+      <SettingsGroup title={t("About")} className="settings-about" section="about">
         <div className="settings-row">
           <div className="settings-row-text">
             <span className="settings-label">herdr web ui</span>
@@ -567,7 +569,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   return props.open ? <OpenSettingsDialog {...props} /> : null;
 }
 
-function OpenSettingsDialog({ section = null, linkPage = null, onPage, onClose, actions, updates, auth, herdrVersion, onEnableNotifications, overPreview = false }: SettingsDialogProps) {
+function OpenSettingsDialog({ section = null, linkPage = null, linkSection = null, onPage, onClose, actions, updates, auth, herdrVersion, onEnableNotifications, overPreview = false }: SettingsDialogProps) {
   const t = useT();
   const narrow = useNarrow();
   // opened by Forward, the dialog shows what that entry of the history showed
@@ -616,8 +618,9 @@ function OpenSettingsDialog({ section = null, linkPage = null, onPage, onClose, 
       if (settingsBodyRef.current) settingsBodyRef.current.scrollTop = settingsScrollRef.current;
       keyBarButtonRef.current?.focus({ preventScroll: true });
     } else if (before === null) {
-      // a button that points at Updates opens on it, and the focus goes there too
-      const pointed = section === "updates" ? settingsBodyRef.current?.querySelector<HTMLElement>(".settings-updates") : null;
+      // a button that points at Updates opens on it, and the focus goes there too; so does a link to a group
+      const named = section === "updates" ? "updates" : linked && linkSection ? linkSection : null;
+      const pointed = named ? settingsBodyRef.current?.querySelector<HTMLElement>(`[data-section="${CSS.escape(named)}"]`) : null;
       if (pointed) { pointed.focus({ preventScroll: true }); pointed.scrollIntoView(); }
       else tab(page)?.focus();
     } else if (before.page !== page && narrow) {
