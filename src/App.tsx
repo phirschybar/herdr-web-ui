@@ -214,7 +214,8 @@ export function App() {
   // App picked the selected pane itself because the one selected closed: it must not raise a
   // phone's keyboard (over the drawer the close was tapped in) until the user picks a pane or lens
   const [autoSelected, setAutoSelected] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // a phone opened by a link that says so starts with its drawer out (lib/deepLink.ts)
+  const [drawerOpen, setDrawerOpen] = useState(() => initialLink?.sidebar === "shown" && window.matchMedia?.("(min-width: 769px)").matches !== true);
   const drawerOpenRef = useRef(drawerOpen); drawerOpenRef.current = drawerOpen;
   // from 769px the drawer is a plain sidebar column and its toggle is hidden, so a drawer a
   // narrow window opened must not come back (with its scrim) the next time the window narrows
@@ -224,7 +225,8 @@ export function App() {
   selectionRef.current = { machineId: selectedMachineId, paneId: selectedPaneId };
   // on a phone the drawer follows a swipe in from the left edge, and a swipe back (lib/edgeSwipe.ts)
   useEffect(() => watchDrawerSwipe(() => drawerOpenRef.current, setDrawerOpen), []);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // a desktop opened by a link that says so starts with the sidebar collapsed, and the address says so while it is
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => initialLink?.sidebar === "hidden");
   // the width the sidebar's edge was dragged to on this device; null is the density's own
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth);
   const [lens, setLens] = useState<{ key: string; view: PaneView }>({ key: "", view: "terminal" });
@@ -660,6 +662,7 @@ export function App() {
     const link: AppLink = {
       machine: selectedMachineId, workspace: linkWorkspaceId, workspaceSlug: linkSlug, pane: selectedPaneId, view: selectedPaneId ? view : null, file: linkFile,
       settings: settingsOpen ? settingsPage : null, section: settingsOpen && settingsPage === settingsLinkPage ? settingsLinkSection : null,
+      sidebar: wideScreen && sidebarCollapsed ? "hidden" : null,
       create: newSessionOpen ? { kind: newTab ? "tab" : "workspace", cwd: newFields?.cwd ?? null, name: newFields?.name ?? null, agent: newFields?.agent ?? null } : null,
     };
     const previous = writtenLink.current;
@@ -670,7 +673,7 @@ export function App() {
     const url = `${window.location.pathname}${search}${window.location.hash}`;
     if (previous !== null && !autoSelected && !settingsOpen && !newSessionOpen && isNavigation(previous, link)) window.history.pushState({ [NAV_KEY]: true }, "", url);
     else window.history.replaceState(window.history.state, "", url);
-  }, [locked, machines.length, linkLanded, selectedMachineId, selectedPaneId, linkWorkspaceId, linkSlug, linkFile, view, settingsOpen, settingsPage, settingsLinkPage, settingsLinkSection, newSessionOpen, newTab, newFields, autoSelected]);
+  }, [locked, machines.length, linkLanded, selectedMachineId, selectedPaneId, linkWorkspaceId, linkSlug, linkFile, view, settingsOpen, settingsPage, settingsLinkPage, settingsLinkSection, newSessionOpen, newTab, newFields, wideScreen, sidebarCollapsed, autoSelected]);
 
 
   // a file a link named opens over its pane once the pane is shown, as the chat's file links do
@@ -816,6 +819,18 @@ export function App() {
   // the condition its button had. At phone width the palette's button gives its room to the
   // pane's title, and the palette is the menu's first item.
   const paletteItem: RowMenuItem = { id: "palette", label: t("Command palette"), icon: Search, run: () => setPaletteOpen(true) };
+  // a link to a PC this app does not have lands on this PC instead, and says so: the roster lists
+  // every configured PC, connected or not, so one missing from it is not set up here
+  useEffect(() => {
+    const linked = pendingLink.current;
+    if (!linked || machines.length === 0 || machines.some((machine) => machine.id === linked.machine)) return;
+    pendingLink.current = null; pendingFile.current = null;
+    setLinkLanded(true);
+    setHeaderNote("machine-missing");
+    // no pane: the link's pane id means nothing on another PC, so the pane herdr has in front opens
+    selectTarget("local", null);
+  }, [machines, selectTarget]);
+
   // a link to the New workspace dialog opens it once the PCs are in; one for a tab, once the
   // linked workspace's pane is selected (its folder is the workspace's, as the tab strip's + does)
   const [createTick, setCreateTick] = useState(0);
@@ -956,7 +971,7 @@ export function App() {
             <span className="conn-text">{connWord}</span>
           </span>
           {!targetHerdr && <span className="pill pill-offline">{t("herdr offline")}</span>}
-          {headerNote && <span className="pill header-note" role="status">{t(headerNote === "copied" ? "Link copied" : headerNote === "pane-closed" ? "That agent has closed: its workspace is open" : "That link's workspace is closed")}</span>}
+          {headerNote && <span className="pill header-note" role="status">{t(headerNote === "copied" ? "Link copied" : headerNote === "pane-closed" ? "That agent has closed: its workspace is open" : headerNote === "machine-missing" ? "That link's PC is not set up here" : "That link's workspace is closed")}</span>}
           {canSignOut && (
             <button type="button" className="icon-button lock-button header-desktop-only" aria-label={t("Sign out")} title={t("Sign out")} onClick={() => void lock()}>
               <Lock />

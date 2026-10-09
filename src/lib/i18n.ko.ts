@@ -128,6 +128,7 @@ export const KO: Record<string, string> = {
   "Link copied": "링크를 복사했습니다",
   "That agent has closed: its workspace is open": "그 에이전트는 닫혔습니다. 대신 워크스페이스를 열었습니다",
   "That link's workspace is closed": "그 링크의 워크스페이스는 닫혔습니다",
+  "That link's PC is not set up here": "그 링크의 PC는 여기에 설정되어 있지 않습니다",
   "Command palette (⌘⇧K)": "명령 팔레트 (⌘⇧K)",
   "Settings (⌘⇧,)": "설정 (⌘⇧,)",
   "Sign out": "로그아웃",

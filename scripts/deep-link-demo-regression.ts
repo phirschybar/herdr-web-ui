@@ -29,7 +29,8 @@ async function withPage(browser: Browser, search: string, run: (page: Page) => P
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${url}${search}`);
     await page.locator(".conn-live").waitFor({ state: "attached" });
-    await page.locator(".agents-sidebar .agent-item").first().waitFor();
+    // attached, not visible: a link can open with the sidebar collapsed
+    await page.locator(".agents-sidebar .agent-item").first().waitFor({ state: "attached" });
     await run(page);
     assert.deepEqual(errors, []);
   } finally {
@@ -207,6 +208,40 @@ try {
         await page.waitForFunction(() => new URLSearchParams(window.location.search).get("agent") !== "nope", undefined, { timeout: 5_000 });
       });
       console.log("PASS a link to the New workspace dialog fills it and creates nothing; the address follows the fields, and a tab link opens it for its workspace");
+
+      // sidebar=hidden opens a desktop with the sidebar collapsed; the address follows the toggle both ways
+      await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&sidebar=hidden`, async (page) => {
+        await page.locator(".app.sidebar-collapsed").waitFor();
+        await waitQuery(page, "pane", INFRA);
+        assert.equal((await query(page))["sidebar"], "hidden");
+        await page.locator(".sidebar-toggle").click();
+        await page.locator(".app:not(.sidebar-collapsed)").waitFor();
+        await waitQuery(page, "sidebar", null);
+        await page.locator(".sidebar-toggle").click();
+        await waitQuery(page, "sidebar", "hidden");
+      });
+      // sidebar=shown opens a phone with its drawer out; the drawer is a phone's moment, not its address
+      {
+        const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "en-US" });
+        try {
+          await phone.addInitScript(() => localStorage.setItem("herdr-web-ui:settings", JSON.stringify({ language: "en" })));
+          const page = await phone.newPage();
+          await page.goto(`${url}?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&sidebar=shown`);
+          await page.locator('.drawer-toggle[aria-expanded="true"]').waitFor();
+          await waitQuery(page, "sidebar", null);
+        } finally {
+          await phone.close();
+        }
+      }
+      console.log("PASS sidebar=hidden collapses a desktop's sidebar and the address follows the toggle; sidebar=shown opens a phone's drawer");
+
+      // a link to a PC this app does not have opens this PC, and says so
+      await withPage(browser, `?machine=nope&pane=${encodeURIComponent(INFRA)}`, async (page) => {
+        await page.locator(".header-note", { hasText: "That link's PC is not set up here" }).waitFor();
+        await page.locator('.agents-sidebar .agent-select[aria-current="true"]').waitFor();
+        await waitQuery(page, "machine", null);
+      });
+      console.log("PASS a link to a PC that is not set up here opens this PC's pane in front, and says so");
     } finally {
       await browser.close();
     }

@@ -130,6 +130,7 @@ export const JA: Record<string, string> = {
   "Link copied": "リンクをコピーしました",
   "That agent has closed: its workspace is open": "そのエージェントは閉じられました。代わりにワークスペースを開きました",
   "That link's workspace is closed": "そのリンクのワークスペースは閉じられています",
+  "That link's PC is not set up here": "そのリンクの PC はここに設定されていません",
   "Command palette (⌘⇧K)": "コマンドパレット (⌘⇧K)",
   "Settings (⌘⇧,)": "設定 (⌘⇧,)",
   "Sign out": "サインアウト",

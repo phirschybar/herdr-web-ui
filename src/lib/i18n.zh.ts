@@ -132,6 +132,7 @@ export const ZH: Record<string, string> = {
   "Link copied": "已复制链接",
   "That agent has closed: its workspace is open": "该代理已关闭，已改为打开其工作区",
   "That link's workspace is closed": "该链接的工作区已关闭",
+  "That link's PC is not set up here": "该链接的电脑未在此处设置",
   "Command palette (⌘⇧K)": "命令面板 (⌘⇧K)",
   "Settings (⌘⇧,)": "设置 (⌘⇧,)",
   "Sign out": "退出登录",

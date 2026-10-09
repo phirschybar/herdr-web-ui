@@ -3,6 +3,11 @@
  *
  *   ?machine=<pc>&ws=<id>-<slug>&pane=<pane>&view=chat|terminal&file=<path>&settings=<page>&section=<group>
  *   ?new=workspace|tab&cwd=<folder>&name=<name>&agent=<kind>
+ *   &sidebar=hidden|shown
+ *
+ * `sidebar=hidden` opens a desktop with the sidebar collapsed, and is in the address while it is;
+ * `sidebar=shown` opens a phone with its drawer out (a phone's drawer closes once a pane is picked,
+ * so its address never says so).
  *
  * `new` opens the New workspace dialog (a tab in the linked workspace with `tab`), its fields
  * filled from the link and the address following what is typed. A link never creates anything:
@@ -36,6 +41,8 @@ export interface AppLink {
   section?: string | null;
   /** the New workspace dialog, and what its fields say */
   create?: CreateDraft | null;
+  /** the sidebar, when not as the screen opens it: collapsed on a desktop, out on a phone */
+  sidebar?: "shown" | "hidden" | null;
 }
 
 export interface CreateDraft {
@@ -53,7 +60,8 @@ const AGENT_KIND = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 
 const LOCAL = "local";
 /** the query names this module owns; anything else in the address is left as it is */
-const OWN = ["machine", "ws", "pane", "view", "file", "settings", "section", "new", "cwd", "name", "agent"] as const;
+const OWN = ["machine", "ws", "pane", "view", "file", "settings", "section", "new", "cwd", "name", "agent", "sidebar"] as const;
+const SIDEBAR: Readonly<Record<string, "shown" | "hidden">> = { shown: "shown", show: "shown", open: "shown", "1": "shown", hidden: "hidden", hide: "hidden", closed: "hidden", "0": "hidden" };
 /** a slug stays this short, cut at a word where it can be: a link names the workspace, it does not spell it out */
 const SLUG_MAX = 24;
 
@@ -89,6 +97,7 @@ export function readLink(search: string): AppLink {
     settings,
     section: settings ? named(query.get("section")) : null,
     create: readCreate(query),
+    sidebar: SIDEBAR[query.get("sidebar") ?? ""] ?? null,
   };
 }
 
@@ -117,6 +126,7 @@ export function linkSearch(link: AppLink, current = ""): string {
   if (link.pane && link.file) query.set("file", link.file);
   if (link.settings) query.set("settings", link.settings);
   if (link.settings && link.section) query.set("section", link.section);
+  if (link.sidebar) query.set("sidebar", link.sidebar);
   if (link.create) {
     query.set("new", link.create.kind);
     if (link.create.cwd) query.set("cwd", link.create.cwd);
@@ -140,7 +150,7 @@ export function workspacePane(snapshot: Pick<SessionSnapshot, "workspaces" | "pa
 }
 
 /** Why a link could not open what it named: its pane closed (its workspace opened instead), or its workspace too. */
-export type LinkNote = "pane-closed" | "workspace-closed";
+export type LinkNote = "pane-closed" | "workspace-closed" | "machine-missing";
 
 /**
  * Where a link lands on a PC's roster. The workspace is the id's when the slug still names it
