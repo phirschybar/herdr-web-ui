@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import panes from "../site/demo/fixtures/panes.json";
 import { buildDemoApp } from "./demo-build.ts";
+import { runMoreItem } from "./header-more.ts";
 
 // Deep links (lib/deepLink.ts) on the unmodified app over the demo's fixture transport: an
 // address names the PC, workspace, pane, lens and Settings page, opens there, and follows the app
@@ -97,6 +98,58 @@ try {
         assert.equal(await selected(page), DOCS);
       });
       console.log("PASS opening another pane is a history entry and a lens switch is not; Back and Forward return to each pane in its lens");
+
+      // a move gives a pane a new id: the address follows it on the pane's own entry, and an older
+      // entry naming the old id opens the pane where it went, with Forward's entries kept
+      await withPage(browser, `?ws=${wsOf(DOCS)}&pane=${encodeURIComponent(DOCS)}`, async (page) => {
+        await waitSelected(page, DOCS);
+        await page.locator(`.agents-sidebar .agent-item[data-pane="${INFRA}"] .agent-select`).click();
+        await waitQuery(page, "pane", INFRA);
+        await page.locator(`.agents-sidebar .agent-item[data-pane="${DOCS}"] .agent-select`).click();
+        await waitQuery(page, "pane", DOCS);
+        const length = await page.evaluate(() => history.length);
+        await runMoreItem(page, "Move pane to…");
+        const menu = page.getByRole("menu", { name: /^Move .+ to$/ });
+        await menu.waitFor();
+        await menu.getByRole("menuitem", { name: "infra", exact: true }).click();
+        await page.waitForFunction((old) => { const pane = new URLSearchParams(window.location.search).get("pane"); return pane !== null && pane !== old; }, DOCS, { timeout: 10_000 });
+        const moved = (await query(page))["pane"]!;
+        await waitSelected(page, moved);
+        assert.equal(await page.evaluate(() => history.length), length, "the moved pane's new id is written over its entry");
+        await page.goBack();
+        await waitSelected(page, INFRA);
+        await page.goBack();
+        await waitSelected(page, moved);
+        await waitQuery(page, "pane", moved);
+        await page.goForward();
+        await waitSelected(page, INFRA);
+        await page.goForward();
+        await waitSelected(page, moved);
+        assert.equal(await page.evaluate(() => history.length), length, "Back and Forward kept every entry");
+      });
+      console.log("PASS a moved pane keeps its history entry, and Back to an entry from before the move opens it under its new id");
+
+      // an entry naming a PC since removed leaves the app where it is and says so; Forward still works
+      await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}`, async (page) => {
+        await waitSelected(page, INFRA);
+        await waitQuery(page, "pane", INFRA);
+        const here = await page.evaluate(() => window.location.search);
+        // the entries a PC removed since would have left: one for its pane, then this pane's again
+        await page.evaluate((search) => {
+          history.pushState(null, "", `?machine=removed&ws=w9-gone&pane=${encodeURIComponent("w9:p1")}`);
+          history.pushState(null, "", `${window.location.pathname}${search}`);
+        }, here);
+        const length = await page.evaluate(() => history.length);
+        await page.goBack();
+        await page.locator(".header-note", { hasText: "That link's PC is not set up here" }).waitFor();
+        await waitQuery(page, "machine", null);
+        await waitQuery(page, "pane", INFRA);
+        assert.equal(await selected(page), INFRA, "the app stays on the pane it showed");
+        await page.goForward();
+        await waitQuery(page, "pane", INFRA);
+        assert.equal(await page.evaluate(() => history.length), length, "Back and Forward kept every entry");
+      });
+      console.log("PASS Back to an entry for a PC since removed stays on the pane shown, says so, and keeps Forward");
 
       // a link to a Settings page opens it there; the address follows its pages and drops it on close
       await withPage(browser, `?ws=${wsOf(INFRA)}&pane=${encodeURIComponent(INFRA)}&settings=terminal`, async (page) => {
