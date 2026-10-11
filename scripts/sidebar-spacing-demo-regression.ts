@@ -94,9 +94,12 @@ try {
       });
       assert.ok(metrics.agentsTop - metrics.machineBottom <= spacing, `${label} folded PC gap is ${metrics.agentsTop - metrics.machineBottom}px`);
       assert.ok(metrics.listBottom - metrics.machineBottom <= spacing, `${label} folded list padding is ${metrics.listBottom - metrics.machineBottom}px`);
-      assert.ok(metrics.agentsHeight <= metrics.shellHeight / 2 + 1, `${label} Agents keeps its half-sidebar cap`);
+      // fork: a list with rows drops the half-sidebar cap and takes all the space the folded PCs release
+      if (empty) assert.ok(metrics.agentsHeight <= metrics.shellHeight / 2 + 1, `${label} Agents keeps its half-sidebar cap`);
+      else assert.ok(metrics.agentsHeight > metrics.shellHeight / 2, `${label} Agents grows past the half-sidebar cap (${metrics.agentsHeight}px of ${metrics.shellHeight}px)`);
       assert.equal(metrics.contentsOverflow, "auto", `${label} Agents keeps scroll ownership`);
-      assert.equal(Math.round(metrics.footerBottom), Math.round(metrics.shellBottom), `${label} footer stays at the bottom`);
+      // fork: fork/sidebar-header-settings hides an empty footer from 769px, which has no bottom to keep
+      if (metrics.footerBottom > 0) assert.equal(Math.round(metrics.footerBottom), Math.round(metrics.shellBottom), `${label} footer stays at the bottom`);
       assert.deepEqual(await page.locator(".agents-sidebar .agent-title").allTextContents(), before, `${label} agent order is unchanged`);
 
       await agentToggle.click();

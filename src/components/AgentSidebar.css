@@ -15,6 +15,8 @@
 /* A visible Agents list fills the space released by folded PC groups, up to its existing cap. */
 .sidebar-shell:not(:has(.machine-list .machine-workspaces)):has(.agents-sidebar:not(.is-collapsed):not(.is-empty)) .agents-sidebar {
   flex: 1 1 auto;
+  /* fork: no cap here, so Agents takes the whole of the space the folded PCs release */
+  max-height: none;
 }
 
 /* positioned: a row's visually hidden label is absolute, and must not size the page instead */
