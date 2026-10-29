@@ -27,7 +27,8 @@ to change. Also read [server/AGENTS.md](server/AGENTS.md) and [src/AGENTS.md](sr
   user sends or discards it.
 - Prompt answers go through `POST /api/pane/prompt/answer`, never guessed digit keys.
 - Selecting a pane or tab in the browser never moves herdr's own focus; only an explicit action
-  that needs it calls `pane.focus`.
+  that needs it calls `pane.focus`, or a pick on a device that turned on Settings → Terminal →
+  Move herdr's focus.
 - Never edit `shared/herdr-api.generated.ts`; run `bun run generate:types`.
 - Theme colors are edited only in the theme blocks of `src/styles.css`. Never edit
   `src/lib/themes.generated.ts` or the generated copies in DESIGN.md, index.html and

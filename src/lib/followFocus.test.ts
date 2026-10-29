@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "bun:test";
 import { paneStorageId, type Machine } from "../../shared/machines.ts";
-import { deviceBusy, deviceInUse, followsHerdrFocus, movingHerdrFocus, movingHerdrFocusOn, OWN_MOVE_HOLD_MS, unsentDraft, type PaneDrafts } from "./followFocus.ts";
+import { deviceBusy, deviceInUse, followsHerdrFocus, moveHerdrFocus, movingHerdrFocus, movingHerdrFocusOn, OWN_MOVE_HOLD_MS, unsentDraft, type PaneDrafts } from "./followFocus.ts";
 import { paneLifetimes } from "./paneLifetime.ts";
 import { writeTerminalDraft } from "./terminalDraft.ts";
 
@@ -176,5 +176,38 @@ describe("an unsent message on the pane this device has open", () => {
     expect(unsentDraft(pane("w9:p4"))).toBe(false);
     expect(unsentDraft(pane("w9:p5"))).toBe(false);
     expect(unsentDraft({ machineId: "local", paneId: null })).toBe(false);
+  });
+});
+
+describe("moving herdr's focus with this device", () => {
+  it("leaves herdr's focus alone until this device asks to move it, and for a pick with no pane", () => {
+    const focus = jest.fn(async () => undefined);
+    expect(moveHerdrFocus(false, "local", "w1:p2", focus)).toBeNull();
+    expect(moveHerdrFocus(true, "local", null, focus)).toBeNull();
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it("focuses the pane on its own PC, held as this device's own move until herdr answers", async () => {
+    let answer!: () => void;
+    const focus = jest.fn((_pane: string, _machine: string) => new Promise<void>((ok) => { answer = ok; }));
+    const moved = moveHerdrFocus(true, "office", "w2:p1", focus);
+    expect(focus).toHaveBeenCalledWith("w2:p1", "office");
+    // herdr's pane-focused frame for it is not followed as a second, automatic pick
+    expect(movingHerdrFocusOn("office")).toBe(true);
+    expect(movingHerdrFocusOn("local")).toBe(false);
+    answer();
+    await moved;
+    expect(movingHerdrFocusOn("office")).toBe(false);
+  });
+
+  it("costs only the move when the PC refuses it", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await expect(moveHerdrFocus(true, "local", "w1:p2", async () => { throw new Error("pane_not_found"); })).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalled();
+      expect(movingHerdrFocusOn("local")).toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -215,6 +215,15 @@ it("leaves herdr's focus alone until this device asks to follow it, and keeps th
   expect(SHARED_SETTING_KEYS as readonly string[]).not.toContain("followHerdrFocus");
 });
 
+it("leaves herdr's focus where it is on this device's picks until it asks to move it, and keeps that choice its own", () => {
+  expect(DEFAULT_SETTINGS.moveHerdrFocus).toBe(false);
+  expect(sanitizeSettings({}).moveHerdrFocus).toBe(false);
+  expect(sanitizeSettings({ moveHerdrFocus: true }).moveHerdrFocus).toBe(true);
+  expect(sanitizeSettings({ moveHerdrFocus: "true" }).moveHerdrFocus).toBe(false);
+  expect(SETTING_SCOPE.moveHerdrFocus).toBe("device");
+  expect(SHARED_SETTING_KEYS as readonly string[]).not.toContain("moveHerdrFocus");
+});
+
 it("keeps the composer's New tab button off until this device turns it on, and keeps that choice its own", () => {
   expect(sanitizeSettings({}).composerNewTabButton).toBe(false);
   expect(sanitizeSettings({ composerNewTabButton: true }).composerNewTabButton).toBe(true);

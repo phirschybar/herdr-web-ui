@@ -532,6 +532,9 @@ function TerminalPage({ keyBarButtonRef, onEditKeyBar }: { keyBarButtonRef: RefO
       <SettingsRow label={t("Follow herdr's focus")} description={t("When herdr moves to another pane, by a click in its window, a herdr command or a script, this device opens that pane too. Only on the PC open here, and only on this device. A PC on Ovis older than 0.4.13 does not report herdr's focus: update it first.")}>
         <Toggle label={t("Follow herdr's focus")} checked={settings.followHerdrFocus} onChange={(followHerdrFocus) => update({ followHerdrFocus })} />
       </SettingsRow>
+      <SettingsRow label={t("Move herdr's focus")} description={t("When you open a pane on this device, herdr's own window brings it to the front too, as a click there would, and herdr's plugins see it focused: one that wakes a sleeping agent on focus wakes it. Only on this device.")}>
+        <Toggle label={t("Move herdr's focus")} checked={settings.moveHerdrFocus} onChange={(moveHerdrFocus) => update({ moveHerdrFocus })} />
+      </SettingsRow>
     </SettingsGroup>
   );
 }

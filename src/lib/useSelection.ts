@@ -8,6 +8,7 @@ import { markSelection, type SelectionMark } from "./selectionMark.ts";
 import type { PaneView } from "./actions.ts";
 import type { Translate } from "./i18n.ts";
 import { storedSelection, storeSelection } from "./useSplitView.ts";
+import { moveHerdrFocus } from "./followFocus.ts";
 
 type SelectionHint = { machine: string; pane: string; workspace: string } | null;
 type SelectTarget = (machineId: string, paneId: string | null, view?: PaneView) => void;
@@ -115,7 +116,7 @@ export function useSelectionMark({ selectedMachineId, selectedPaneId }: { select
   return { selectionRef, movingPanes };
 }
 
-export function useSelectTarget({ selectedMachineId, setConnected, setConnectedBefore, setSelectedMachineId, setSelectedPaneId, setAutoSelected, setDrawerOpen, setOutputStopped, setNotificationViewTarget, setTerminalPeek, pendingLink, pendingFile, setLinkLanded, selectionHint, selectionSince, rosterSeq, snapshot, selectedMachine, selectedPaneId, setHeaderNote, linkTick, movingPanes }: {
+export function useSelectTarget({ selectedMachineId, setConnected, setConnectedBefore, setSelectedMachineId, setSelectedPaneId, setAutoSelected, setDrawerOpen, setOutputStopped, setNotificationViewTarget, setTerminalPeek, pendingLink, pendingFile, setLinkLanded, selectionHint, selectionSince, rosterSeq, snapshot, selectedMachine, selectedPaneId, setHeaderNote, linkTick, movingPanes, moveFocusRef }: {
   selectedMachineId: string;
   setConnected: Dispatch<SetStateAction<boolean>>;
   setConnectedBefore: Dispatch<SetStateAction<boolean>>;
@@ -139,6 +140,8 @@ export function useSelectTarget({ selectedMachineId, setConnected, setConnectedB
   linkTick: number;
   /** panes a tab move has on its way to another workspace (paneStorageId): their selection waits for the move */
   movingPanes: RefObject<Set<string>>;
+  /** Settings → Terminal → Move herdr's focus (lib/followFocus.ts moveHerdrFocus) */
+  moveFocusRef: RefObject<boolean>;
 }) {
   const selectedMachineRef = useRef(selectedMachineId);
   selectedMachineRef.current = selectedMachineId;
@@ -155,8 +158,10 @@ export function useSelectTarget({ selectedMachineId, setConnected, setConnectedB
     setOutputStopped(false);
     setNotificationViewTarget(view && paneId !== null ? { machine_id: machineId, pane_id: paneId, view } : null);
     setTerminalPeek(null);
-    // this browser's choice only: herdr's focus, its TUI and every other device stay where they are
+    // this browser's choice only: herdr's focus, its TUI and every other device stay where they are,
+    // unless this device asked to move herdr's focus with it
     storeSelection(machineId, paneId);
+    void moveHerdrFocus(moveFocusRef.current, machineId, paneId);
     // a pane picked (a tapped notification, the sidebar, Back) before a link landed supersedes the link
     pendingLink.current = null; pendingFile.current = null; setLinkLanded(true);
     selectionHint.current = null;
@@ -241,7 +246,7 @@ export function useSelectTarget({ selectedMachineId, setConnected, setConnectedB
   return { selectedMachineRef, selectTarget, selectTargetRef, picks };
 }
 
-export function useSelectPane({ pendingLink, pendingFile, setLinkLanded, selectionHint, setSelectedPaneId, setNotificationViewTarget, setTerminalPeek, setAutoSelected, setDrawerOpen }: {
+export function useSelectPane({ pendingLink, pendingFile, setLinkLanded, selectionHint, setSelectedPaneId, setNotificationViewTarget, setTerminalPeek, setAutoSelected, setDrawerOpen, selectedMachineRef, moveFocusRef }: {
   pendingLink: RefObject<AppLink | null>;
   pendingFile: RefObject<string | null>;
   setLinkLanded: Dispatch<SetStateAction<boolean>>;
@@ -251,6 +256,10 @@ export function useSelectPane({ pendingLink, pendingFile, setLinkLanded, selecti
   setTerminalPeek: Dispatch<SetStateAction<TerminalPeek | null>>;
   setAutoSelected: Dispatch<SetStateAction<boolean>>;
   setDrawerOpen: Dispatch<SetStateAction<boolean>>;
+  /** the PC open here: a pane picked on it moves herdr's focus there when asked to */
+  selectedMachineRef: RefObject<string>;
+  /** Settings → Terminal → Move herdr's focus (lib/followFocus.ts moveHerdrFocus) */
+  moveFocusRef: RefObject<boolean>;
 }) {
   const selectPane = useCallback((paneId: string, focusInput = true) => {
     pendingLink.current = null; pendingFile.current = null; setLinkLanded(true);
@@ -259,6 +268,7 @@ export function useSelectPane({ pendingLink, pendingFile, setLinkLanded, selecti
     setNotificationViewTarget(null); setTerminalPeek(null);
     setAutoSelected(!focusInput);
     setDrawerOpen(false);
+    void moveHerdrFocus(moveFocusRef.current, selectedMachineRef.current, paneId);
   }, []);
   return { selectPane };
 }

@@ -113,6 +113,9 @@ export interface Settings {
   /** this device opens the pane herdr's own focus moves to (a `pane-focused` frame from the selected PC), as
    *  herdr's window does after `herdr tab focus` or a click there; off: only this device's own picks move it */
   followHerdrFocus: boolean;
+  /** a pane this device opens itself comes to the front in herdr's own window too (pane.focus), so herdr and
+   *  its plugins see it focused; off: this device's picks leave herdr's focus alone (lib/followFocus.ts) */
+  moveHerdrFocus: boolean;
   /** chat text size in px (its body text; the rest scales with it); null follows the interface size */
   chatFontSize: number | null;
   /** fonts tried before the UI font in the chat's prose (code stays mono), as a CSS font-family list; "" keeps the UI font */
@@ -198,12 +201,12 @@ export type DiffStyle = (typeof DIFF_STYLES)[number];
 
 /** Raw custom text, key combinations and account keys are never copied. Requiring every other
  * Settings field in the projection makes a new field require an explicit collection decision.
- * fileOpen, webLinks, the launch modes, followHerdrFocus, composerNewTabButton, terminalMirrorWrap, sidebarFilter, the
+ * fileOpen, webLinks, the launch modes, followHerdrFocus, moveHerdrFocus, composerNewTabButton, terminalMirrorWrap, sidebarFilter, the
  * interface font and the chat's history page size are not collected: the telemetry schema (shared/telemetry.ts) does not carry them. */
 type TelemetrySourceSettings = Omit<Settings,
   "keyBarExtras" | "keyBarItems" | "shortcutOverrides" | "terminalFontFamily" | "chatFontFamily" | "uiFontFamily"
   | "quickReplies" | "usageOrder" | "usageHidden" | "fileOpen" | "webLinks" | "claudeLaunchMode" | "codexLaunchMode"
-  | "followHerdrFocus" | "composerNewTabButton" | "terminalMirrorWrap" | "sidebarFilter" | "historyPrompts">;
+  | "followHerdrFocus" | "moveHerdrFocus" | "composerNewTabButton" | "terminalMirrorWrap" | "sidebarFilter" | "historyPrompts">;
 
 /** Compare structured custom settings by content against this app's built-in defaults. */
 function differsFromDefault(value: unknown, defaultValue: unknown): boolean {
@@ -284,6 +287,8 @@ export const SETTING_SCOPE = {
   terminalMirrorWrap: "device",
   // a desk that follows herdr's focus must not move a phone open on another pane
   followHerdrFocus: "device",
+  // a desk that moves herdr's focus must not have a phone move it too
+  moveHerdrFocus: "device",
   chatFontSize: "device", chatFontFamily: "device", historyPrompts: "device", uiFontSize: "device", uiFontFamily: "device", chatWidth: "device", enterSends: "device",
   // a desk's composer button: a phone never shows it
   composerNewTabButton: "device",
@@ -327,6 +332,7 @@ export const DEFAULT_SETTINGS: Settings = {
   terminalMirrorWrap: null,
   releasePaneAway: false,
   followHerdrFocus: false,
+  moveHerdrFocus: false,
   chatFontSize: null,
   historyPrompts: 10,
   chatFontFamily: "",
@@ -515,6 +521,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     terminalMirrorWrap: typeof record["terminalMirrorWrap"] === "boolean" ? record["terminalMirrorWrap"] : null,
     releasePaneAway: typeof record["releasePaneAway"] === "boolean" ? record["releasePaneAway"] : DEFAULT_SETTINGS.releasePaneAway,
     followHerdrFocus: typeof record["followHerdrFocus"] === "boolean" ? record["followHerdrFocus"] : DEFAULT_SETTINGS.followHerdrFocus,
+    moveHerdrFocus: typeof record["moveHerdrFocus"] === "boolean" ? record["moveHerdrFocus"] : DEFAULT_SETTINGS.moveHerdrFocus,
     chatFontFamily: sanitizeFontFamily(record["chatFontFamily"]),
     chatWidth: CHAT_WIDTHS.includes(record["chatWidth"] as ChatWidth) ? record["chatWidth"] as ChatWidth : DEFAULT_SETTINGS.chatWidth,
     enterSends: typeof record["enterSends"] === "boolean" ? record["enterSends"] : DEFAULT_SETTINGS.enterSends,

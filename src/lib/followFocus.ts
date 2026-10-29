@@ -1,4 +1,5 @@
 import { paneStorageId } from "../../shared/machines.ts";
+import { focusPane } from "./api.ts";
 import { composerDrafts } from "./composerDraft.ts";
 import { restoreDraft } from "./draft.ts";
 import { paneLifetimes } from "./paneLifetime.ts";
@@ -65,6 +66,28 @@ export function movingHerdrFocus<T>(machineId: string, request: Promise<T>): Pro
 /** A request from this device is moving herdr's focus on that PC (movingHerdrFocus). */
 export function movingHerdrFocusOn(machineId: string): boolean {
   return ownMoves.has(machineId);
+}
+
+/**
+ * Moving herdr's focus (Settings → Terminal, `moveHerdrFocus`), the other way from following it:
+ * a pane this device opens itself (the sidebar, a tab, the palette, a notification, Back) comes to
+ * the front in herdr's own window too, as a click there would bring it. herdr reports that to its
+ * plugins as `pane.focused`, so a plugin that acts on focus (one that wakes a hibernated agent)
+ * acts on a pick made here. Automatic picks (following herdr, a link landing, a fallback) never
+ * call this. Held as this device's own move (movingHerdrFocus): herdr's answering frame is not
+ * followed as a second, automatic pick. A PC that refuses it only loses the move: the pane is
+ * open here either way. Null when there is nothing to move.
+ */
+export function moveHerdrFocus(
+  enabled: boolean,
+  machineId: string,
+  paneId: string | null,
+  focus: (paneId: string, machineId: string) => Promise<void> = focusPane,
+): Promise<void> | null {
+  if (!enabled || paneId === null) return null;
+  return movingHerdrFocus(machineId, focus(paneId, machineId)).catch((error: unknown) => {
+    console.warn("moving herdr's focus failed", error);
+  });
 }
 
 /**

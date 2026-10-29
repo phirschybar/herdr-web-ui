@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import type { Page } from "playwright-core";
-import { herdrRpc, tabClose } from "../server/herdr/client.ts";
+import { herdrRpc, sessionSnapshot, tabClose } from "../server/herdr/client.ts";
 import { openSettingsPage } from "./settings-page.ts";
 
 export interface FollowFocusFixture {
@@ -137,5 +137,80 @@ export async function checkFollowHerdrFocus(page: Page, fixture: FollowFocusFixt
     for (const tab of tabs) await tabClose(tab).catch(() => undefined);
     // a check that stopped partway leaves the setting as it found it, for the checks after it
     if (following) await follow(false).catch(() => undefined);
+  }
+}
+
+/**
+ * Settings → Terminal → Move herdr's focus against a real herdr: off, a tab picked here leaves
+ * herdr's own focus where it is; on, herdr's focus moves to the pane picked here, as a click in its
+ * window would (and herdr tells its plugins). Run after checkFollowHerdrFocus, with Settings
+ * closed and the setting off, in the workspace of the pane selected; it ends with herdr's focus and this device on the pane selected when
+ * it began, and with the setting off, also when it fails.
+ */
+export async function checkMoveHerdrFocus(page: Page): Promise<void> {
+  const until = async (check: () => Promise<boolean>, label: string): Promise<void> => {
+    const deadline = Date.now() + 10_000;
+    while (!(await check())) {
+      assert.ok(Date.now() < deadline, `Timed out: ${label}`);
+      await page.waitForTimeout(50);
+    }
+  };
+  const selectedPaneId = () => page.evaluate(() => JSON.parse(sessionStorage.getItem("ovis:selection") ?? "null")?.pane_id as string | undefined);
+  const herdrFocus = async () => (await sessionSnapshot()).focused_pane_id;
+  const move = async (on: boolean): Promise<void> => {
+    if (!(await page.locator(".settings-dialog").isVisible())) await page.keyboard.press("ControlOrMeta+Shift+Comma");
+    await openSettingsPage(page, "Terminal");
+    const toggle = page.getByRole("switch", { name: "Move herdr's focus", exact: true });
+    if ((await toggle.getAttribute("aria-checked")) !== String(on)) await toggle.click();
+    assert.equal(await toggle.getAttribute("aria-checked"), String(on));
+    await page.getByRole("button", { name: "Close settings", exact: true }).click();
+  };
+  // tabs herdr opens in the background, beside the selected pane where the tab strip shows them:
+  // herdr's focus stays where it was
+  const backgroundTab = (label: string) => herdrRpc<{ tab: { tab_id: string }; root_pane: { pane_id: string } }>(
+    "tab.create", { workspace_id: workspaceId, label, focus: false });
+  const pick = async (label: string): Promise<void> => {
+    const tab = page.locator(".tab-strip").getByRole("tab").filter({ hasText: label }).first();
+    await tab.waitFor();
+    await tab.click();
+  };
+
+  const before = await selectedPaneId();
+  assert.ok(before, "a pane is selected before the check");
+  const herdrBefore = await herdrFocus();
+  const workspaceId = (await sessionSnapshot()).panes.find((pane) => pane.pane_id === before)?.workspace_id;
+  assert.ok(workspaceId, "the selected pane is in a workspace");
+  const tabs: string[] = [];
+  let moving = false;
+  try {
+    // off, as it starts: a pick here is this device's alone
+    const kept = await backgroundTab("move focus off");
+    tabs.push(kept.tab.tab_id);
+    await pick("move focus off");
+    await until(async () => await selectedPaneId() === kept.root_pane.pane_id, "the picked tab opens here");
+    // fixed wait: proving that herdr's focus does not move
+    await page.waitForTimeout(NO_FOLLOW_WAIT_MS);
+    assert.equal(await herdrFocus(), herdrBefore, "a device that did not ask to move herdr's focus leaves it alone");
+
+    moving = true;
+    await move(true);
+    const moved = await backgroundTab("move focus on");
+    tabs.push(moved.tab.tab_id);
+    await pick("move focus on");
+    await until(async () => await selectedPaneId() === moved.root_pane.pane_id, "the picked tab opens here");
+    await until(async () => await herdrFocus() === moved.root_pane.pane_id, "herdr's focus moves to the pane picked here");
+    // and back: a pick of the pane this device began on moves herdr there too
+    await page.goBack();
+    await page.goBack();
+    await until(async () => await selectedPaneId() === before, "Back returns to the pane the check began on");
+    await until(async () => await herdrFocus() === before, "herdr's focus follows this device's Back");
+    await move(false);
+    moving = false;
+    console.log("PASS herdr's focus moves with this device's picks only once this device asks for it");
+  } finally {
+    if (moving) await move(false).catch(() => undefined);
+    // herdr's focus back where it was, before the tabs close: the selection falls back to it
+    if (herdrBefore) await herdrRpc("pane.focus", { pane_id: herdrBefore }).catch(() => undefined);
+    for (const tab of tabs) await tabClose(tab).catch(() => undefined);
   }
 }
