@@ -1638,10 +1638,10 @@ Alert rows of the table above from the `--droplet-*` roles in `src/styles.css`.
   current window as herdr's own window does. The coding-agent apps have no outside focus to follow.
 - Moving herdr's focus is the opposite opt-in, also per device (Settings → Terminal → Move
   herdr's focus, off by default): a pane this device opens itself (the sidebar, a tab, the
-  palette, a notification, Back) is sent `pane.focus`, so herdr's own window brings it to the
-  front as a click there would, and herdr's plugins get `pane.focused` for it (a plugin that
+  palette, a notification, Back, a link opened here) is sent `pane.focus`, so herdr's own window
+  brings it to the front as a click there would, and herdr's plugins get `pane.focused` for it (a plugin that
   wakes a hibernated agent on focus wakes it from here). Automatic picks (following herdr, a
-  link landing, a fallback) never move it. The request is held as this device's own move, so
+  fallback for a closed pane) never move it. The request is held as this device's own move, so
   herdr's answering frame is not followed as a second pick, and with both settings on, two
   devices do not bounce: only a device's own picks move herdr, and a followed pane is an
   automatic pick. A refused move only loses the move. tmux's analogue is a client that selects

@@ -183,6 +183,8 @@ export function useSelectTarget({ selectedMachineId, setConnected, setConnectedB
         setLinkLanded(true);
         if (landed.note) setHeaderNote(landed.note);
         if (landed.pane) {
+          // a link opened is this device's own pick of the place it names, even one already selected
+          void moveHerdrFocus(moveFocusRef.current, linked.machine, landed.pane);
           if (landed.pane !== selectedPaneId) {
             setSelectedPaneId(landed.pane);
             // the link's lens was for its own pane: the one opened instead keeps its own

@@ -70,10 +70,10 @@ export function movingHerdrFocusOn(machineId: string): boolean {
 
 /**
  * Moving herdr's focus (Settings → Terminal, `moveHerdrFocus`), the other way from following it:
- * a pane this device opens itself (the sidebar, a tab, the palette, a notification, Back) comes to
- * the front in herdr's own window too, as a click there would bring it. herdr reports that to its
+ * a pane this device opens itself (the sidebar, a tab, the palette, a notification, Back, a link)
+ * comes to the front in herdr's own window too, as a click there would bring it. herdr reports that to its
  * plugins as `pane.focused`, so a plugin that acts on focus (one that wakes a hibernated agent)
- * acts on a pick made here. Automatic picks (following herdr, a link landing, a fallback) never
+ * acts on a pick made here. Automatic picks (following herdr, a fallback for a closed pane) never
  * call this. Held as this device's own move (movingHerdrFocus): herdr's answering frame is not
  * followed as a second, automatic pick. A PC that refuses it only loses the move: the pane is
  * open here either way. Null when there is nothing to move.

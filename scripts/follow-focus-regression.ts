@@ -204,9 +204,18 @@ export async function checkMoveHerdrFocus(page: Page): Promise<void> {
     await page.goBack();
     await until(async () => await selectedPaneId() === before, "Back returns to the pane the check began on");
     await until(async () => await herdrFocus() === before, "herdr's focus follows this device's Back");
+    // a link opened here is this device's own pick too: herdr's focus moves to the pane it names
+    const linked = await backgroundTab("move focus link");
+    tabs.push(linked.tab.tab_id);
+    const origin = new URL(page.url()).origin;
+    await page.goto(`${origin}/?pane=${encodeURIComponent(linked.root_pane.pane_id)}`);
+    await until(async () => await selectedPaneId() === linked.root_pane.pane_id, "the link opens its pane here");
+    await until(async () => await herdrFocus() === linked.root_pane.pane_id, "herdr's focus moves to the pane a link opened here");
+    await page.goto(`${origin}/?pane=${encodeURIComponent(before)}`);
+    await until(async () => await selectedPaneId() === before && await herdrFocus() === before, "a link back to the pane the check began on moves herdr there too");
     await move(false);
     moving = false;
-    console.log("PASS herdr's focus moves with this device's picks only once this device asks for it");
+    console.log("PASS herdr's focus moves with this device's picks and the links it opens only once this device asks for it");
   } finally {
     if (moving) await move(false).catch(() => undefined);
     // herdr's focus back where it was, before the tabs close: the selection falls back to it
